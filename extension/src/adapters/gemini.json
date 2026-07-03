@@ -5,7 +5,7 @@
   "adapterVersion": "1.0.0",
   "selectors": {
     "input": "rich-textarea .ql-editor",
-    "sendButton": "button.send-button",
+    "sendButton": "button[aria-label=\"메시지 보내기\"], button:has(mat-icon[data-mat-icon-name=\"arrow_upward\"])",
     "fileInput": "input[type=\"file\"]"
   },
   "endpoints": {

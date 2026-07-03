@@ -97,6 +97,14 @@ function setPromptText(adapter: SiteAdapter, text: string): void {
 function installSendHooks(adapter: SiteAdapter): void {
   async function guardSend(redispatch: () => void): Promise<void> {
     const text = extractPromptText(adapter);
+    // Some sites' send buttons stay clickable even with an empty composer
+    // (Claude/Gemini don't always set the native `disabled` attribute). An
+    // empty submit is a no-op in the host app and not a "prompt" worth a
+    // classify round-trip or an audit-log entry -- just let it through.
+    if (text.trim().length === 0) {
+      redispatch();
+      return;
+    }
     const verdict = await requestVerdict("classifyPrompt", { site: adapter.id, text });
     if (verdict.action !== "allow") return;
     if (verdict.replacementText !== undefined && verdict.replacementText !== text) {

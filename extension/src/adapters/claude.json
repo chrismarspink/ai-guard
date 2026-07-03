@@ -4,8 +4,8 @@
   "urls": ["https://claude.ai/*"],
   "adapterVersion": "1.0.0",
   "selectors": {
-    "input": "div[contenteditable=\"true\"]",
-    "sendButton": "button[aria-label=\"Send Message\"]",
+    "input": "div[data-testid=\"chat-input\"]",
+    "sendButton": "button[aria-label=\"메시지 보내기\"]",
     "fileInput": "input[type=\"file\"]"
   },
   "endpoints": {
