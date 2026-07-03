@@ -217,6 +217,40 @@ server is deployed/copied without the rest of the monorepo, it falls back to
 the bundled copy at `app/data/gradeprofiles/n2sf-v1.json` (see
 `app/core/seed.py`), so `GET /gradeprofile/n2sf-v1` still works standalone.
 
+## Deploying a demo to Hugging Face Spaces (free hosting)
+
+HF Spaces' "Docker SDK" runs exactly one container, so `docker-compose.yml`
+(server + Postgres + Redis) doesn't apply directly. `Dockerfile.hf` is a
+single-container variant for this: SQLite instead of Postgres, and Redis
+simply left unconfigured (`app/core/redis_client.py` already soft-fails to
+"no cache" when Redis is unreachable — see the CORS section above for the
+same "cache, not source of truth" reasoning). Verified locally with
+`docker build -f Dockerfile.hf` + `docker run` (no Postgres/Redis
+containers) — health check, admin login, install register/policy fetch,
+and dashboard summary all work standalone.
+
+```bash
+pip install -U huggingface_hub
+hf auth login                       # paste a Write-scoped token from
+                                     # https://huggingface.co/settings/tokens
+./deploy-to-hf.sh <hf-username>/<space-name>
+```
+
+The script assembles `app/` + `requirements.txt` + `Dockerfile.hf` (renamed
+to `Dockerfile`) + `hf-space-readme.md` (renamed to `README.md`, carries the
+YAML frontmatter HF's Docker SDK requires) into a throwaway temp directory
+and force-pushes it as that Space's entire git history — deliberate, since
+the Space is meant to always reflect "whatever `server/` looks like right
+now," not accumulate its own commit history. Create the Space itself first
+(hf.co → New Space → SDK: Docker) before running this.
+
+Set `JWT_SECRET`/`FLEET_WEBHOOK_SECRET`/`SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`
+under the Space's Settings → Repository secrets — never commit real values
+for these. Free-tier limitations: sleeps after inactivity (cold start on the
+next visit), and no persistent disk by default (SQLite data resets on
+rebuild/restart/sleep unless the Space's Persistent Storage add-on is
+enabled) — fine for a demo, not for anything you need to keep.
+
 ## Environment variables
 
 | Var | Purpose |

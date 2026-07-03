@@ -1,0 +1,31 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+
+# Hugging Face Spaces (Docker SDK) runs exactly one container -- no
+# docker-compose, so this variant drops Postgres/Redis entirely instead of
+# trying to run a multi-process supervisor in one image:
+#   - DATABASE_URL defaults to a local SQLite file (see docker-entrypoint
+#     env below) -- fine for a low-traffic demo, and this app's models were
+#     already exercised against SQLite in the test suite.
+#   - REDIS_URL is simply left unset; app/core/redis_client.py already
+#     soft-fails to "no cache" when Redis is unreachable (see server/README.md
+#     "CORS" section's neighbor, "Redis is a pure cache here"), so nothing
+#     breaks, it just runs uncached.
+# Without a Space-level "Persistent Storage" add-on, /app/data is ephemeral
+# and resets whenever the Space rebuilds or sleeps-and-wakes on the free
+# tier -- acceptable for a demo, not for anything you need to keep.
+ENV DATABASE_URL=sqlite:////app/data/app.db
+RUN mkdir -p /app/data
+
+# HF Spaces' Docker SDK expects the container to listen on the port declared
+# by `app_port` in the Space's README frontmatter (see README.hf.md) --
+# kept at 8080 here to match the rest of this repo's docs/scripts.
+EXPOSE 8080
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
