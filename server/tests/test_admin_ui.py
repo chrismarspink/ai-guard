@@ -13,3 +13,12 @@ def test_chart_js_served_locally_not_from_a_cdn(client):
     r = client.get("/static/chart.umd.min.js")
     assert r.status_code == 200
     assert "Chart.js" in r.text
+
+
+def test_root_redirects_to_admin_console(client):
+    # Hosts that default to showing a bare "/" (e.g. Hugging Face Spaces'
+    # embedded app view) would otherwise hit a raw {"detail":"Not Found"} --
+    # found live 2026-07-03 on the deployed Space.
+    r = client.get("/", follow_redirects=False)
+    assert r.status_code in (302, 307)
+    assert r.headers["location"] == "/admin"

@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 import app.models  # noqa: F401  registers all tables on Base before create_all
@@ -44,6 +45,14 @@ app.add_middleware(
 @app.get("/healthz", tags=["health"])
 def healthz():
     return {"status": "ok"}
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    # This app has no landing page of its own -- hosts that default to
+    # showing a bare "/" (Hugging Face Spaces' embedded app view does this)
+    # would otherwise just show a raw {"detail":"Not Found"} JSON 404.
+    return RedirectResponse(url="/admin")
 
 
 # Chart.js is vendored here (app/static/chart.umd.min.js, MIT license) rather
