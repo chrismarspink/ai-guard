@@ -80,7 +80,16 @@ def seed_default_policy() -> None:
         session.add(
             Policy(
                 policy_version=now,
-                mode_prompt=Mode.audit,
+                # Matches extension/src/policy/default-policy.json's bundled
+                # fallback and the plan doc's own §3.2 example. Was `audit`
+                # here until 2026-07-03 -- harmless while the extension only
+                # used its own bundled "confirm" default, but once the
+                # extension started fetching *this* server's policy (server
+                # precedence wins over the bundled default), "audit" silently
+                # disabled all prompt blocking/confirmation with no error --
+                # found live when prompt blocking stopped working entirely
+                # after pointing the extension at a real deployment.
+                mode_prompt=Mode.confirm,
                 mode_file=Mode.block,
                 sites=DEFAULT_SITES,
                 grade_profile=DEFAULT_GRADE_PROFILE_NAME,
