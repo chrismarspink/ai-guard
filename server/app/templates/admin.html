@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>innoecm-ai-guard — 관리 콘솔</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; color: #1a1a1a; background: #f7f7f8; }
+    header { background: #1a1a2e; color: #fff; padding: 0.8rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+    header h1 { font-size: 1.1rem; margin: 0; }
+    header button { background: #33334d; color: #fff; border: none; padding: 0.4rem 0.9rem; border-radius: 4px; cursor: pointer; }
+    main { max-width: 1080px; margin: 0 auto; padding: 1.5rem; }
+    .hidden { display: none !important; }
+    .card { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 1.2rem 1.5rem; margin-bottom: 1.2rem; }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .tabs button { padding: 0.5rem 1rem; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; }
+    .tabs button.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+    label { display: block; font-weight: bold; margin: 0.8rem 0 0.2rem; font-size: 0.9rem; }
+    input[type=text], input[type=number], input[type=email], input[type=password], textarea, select {
+      width: 100%; box-sizing: border-box; padding: 0.4rem 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-family: inherit;
+    }
+    textarea { min-height: 5rem; font-family: monospace; font-size: 0.85rem; }
+    .row { display: flex; gap: 1.5rem; }
+    .row > div { flex: 1; }
+    .checkline { display: flex; align-items: center; gap: 0.5rem; margin: 0.8rem 0 0; }
+    .checkline label { margin: 0; font-weight: normal; }
+    button.primary { margin-top: 1.2rem; padding: 0.6rem 1.4rem; background: #1a1a2e; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.95rem; }
+    button.primary:hover { background: #33334d; }
+    .msg { margin-top: 0.8rem; padding: 0.6rem 0.9rem; border-radius: 4px; font-size: 0.9rem; }
+    .msg.ok { background: #e3f6e8; color: #1e6b34; }
+    .msg.err { background: #fbe4e4; color: #8a1c1c; }
+    .table-scroll { overflow-x: auto; margin-bottom: 1rem; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 0.4rem 0.7rem; text-align: left; font-size: 0.9rem; vertical-align: top; }
+    /* Short enum-like columns must never wrap; long free-form ones (사용자,
+       검출 항목) get a sane max-width and wrap at word boundaries instead of
+       mid-token -- without this a masked sample like "90****-*******" wraps
+       inside its own parentheses and the row heights go ragged. */
+    td.nowrap, th.nowrap { white-space: nowrap; }
+    td.wrap { max-width: 16rem; word-break: break-word; }
+    td.detections div { white-space: nowrap; }
+    .stat { display: inline-block; margin-right: 2.5rem; }
+    .stat .value { font-size: 1.6rem; font-weight: bold; }
+    .hint { color: #666; font-size: 0.8rem; margin-top: 0.2rem; }
+    #login-screen { max-width: 360px; margin: 4rem auto; }
+    .charts { display: flex; flex-wrap: wrap; gap: 1.2rem; margin: 1rem 0 1.5rem; }
+    .chart-box { flex: 1 1 260px; min-width: 240px; }
+    .chart-box h4 { margin: 0 0 0.4rem; font-size: 0.85rem; color: #444; }
+    .chart-box canvas { max-height: 220px; }
+  </style>
+</head>
+<body>
+  <div id="login-screen" class="card">
+    <h2>innoecm-ai-guard 관리 콘솔</h2>
+    <label for="login-email">이메일</label>
+    <input type="email" id="login-email" autocomplete="username" />
+    <label for="login-password">비밀번호</label>
+    <input type="password" id="login-password" autocomplete="current-password" />
+    <button class="primary" id="login-btn">로그인</button>
+    <div id="login-msg"></div>
+  </div>
+
+  <div id="app" class="hidden">
+    <header>
+      <h1>innoecm-ai-guard 관리 콘솔</h1>
+      <div>
+        <span id="whoami" style="margin-right:1rem;"></span>
+        <button id="logout-btn">로그아웃</button>
+      </div>
+    </header>
+    <main>
+      <div class="tabs">
+        <button id="tab-policy-btn" class="active">정책</button>
+        <button id="tab-dashboard-btn">대시보드</button>
+        <button id="tab-audit-btn">감사 로그</button>
+      </div>
+
+      <section id="tab-policy">
+        <div class="card">
+          <p class="hint">현재 버전: <code id="policy-version">-</code></p>
+
+          <div class="row">
+            <div>
+              <label for="mode-prompt">프롬프트 검사 모드</label>
+              <select id="mode-prompt">
+                <option value="block">block</option>
+                <option value="confirm">confirm</option>
+                <option value="audit">audit</option>
+              </select>
+            </div>
+            <div>
+              <label for="mode-file">파일 검사 모드</label>
+              <select id="mode-file">
+                <option value="block">block</option>
+                <option value="confirm">confirm</option>
+                <option value="audit">audit</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="grade-profile">GradeProfile</label>
+              <input type="text" id="grade-profile" />
+            </div>
+            <div>
+              <label for="heartbeat-min">하트비트 주기(분)</label>
+              <input type="number" id="heartbeat-min" min="1" />
+            </div>
+          </div>
+
+          <div class="checkline"><input type="checkbox" id="log-masking" /><label for="log-masking">이벤트 로그 마스킹 사용</label></div>
+
+          <label>파일 업로드 검사 (2026-07-02: 컨텐츠 스캔 기본, MIP는 옵션)</label>
+          <div class="checkline"><input type="checkbox" id="filecheck-content" /><label for="filecheck-content">컨텐츠 스캔 사용 (등급 O만 통과)</label></div>
+          <div class="checkline"><input type="checkbox" id="filecheck-mip" /><label for="filecheck-mip">MIP 라벨 검사도 함께 사용 (옵션, 둘 다 켜면 더 엄격한 쪽 적용)</label></div>
+
+          <label for="mip-deny-unlabeled">MIP: 라벨 없는 파일 처리</label>
+          <div class="checkline"><input type="checkbox" id="mip-deny-unlabeled" /><label for="mip-deny-unlabeled">라벨 없으면 차단 (끄면 확인 절차로)</label></div>
+          <label for="mip-allow-o">MIP: 공개 등급 허용 라벨 GUID (쉼표로 구분)</label>
+          <input type="text" id="mip-allow-o" placeholder="GUID-PUBLIC-1, GUID-PUBLIC-2" />
+
+          <label for="msg-blocked">차단 시 사용자 안내 메시지</label>
+          <textarea id="msg-blocked"></textarea>
+          <label for="msg-confirm">확인 시 사용자 안내 메시지</label>
+          <textarea id="msg-confirm"></textarea>
+
+          <label for="sites-json">사이트 어댑터 목록 (JSON)</label>
+          <textarea id="sites-json" rows="6"></textarea>
+          <p class="hint">예: [{"id":"chatgpt","urls":["https://chatgpt.com/*"],"adapterVersion":"1.0.0"}]</p>
+
+          <button class="primary" id="save-policy-btn">정책 저장</button>
+          <div id="policy-msg"></div>
+        </div>
+      </section>
+
+      <section id="tab-dashboard" class="hidden">
+        <div class="card">
+          <button id="refresh-dashboard-btn">새로고침</button>
+          <div style="margin-top:1rem;">
+            <div class="stat"><div class="value" id="stat-compliance">-</div><div>설치 준수율</div></div>
+            <div class="stat"><div class="value" id="stat-noncompliant">-</div><div>비준수 단말</div></div>
+            <div class="stat"><div class="value" id="stat-prompt-rate">-</div><div>프롬프트 위반율</div></div>
+            <div class="stat"><div class="value" id="stat-file-rate">-</div><div>파일 위반율</div></div>
+          </div>
+
+          <p class="hint">최근 30일 집계. "위반"은 실제 조치(차단/확인)와 무관하게 등급이 S/C로
+            판정된 비율이고, 아래 막대 그래프는 실제로 어떤 조치가 취해졌는지를 보여준다.</p>
+
+          <div class="charts">
+            <div class="chart-box"><h4>위반율 (%) — 프롬프트 vs 파일</h4><canvas id="chart-violation"></canvas></div>
+            <div class="chart-box"><h4>프롬프트 처리 결과 (건수)</h4><canvas id="chart-prompt-result"></canvas></div>
+            <div class="chart-box"><h4>파일 처리 결과 (건수)</h4><canvas id="chart-file-result"></canvas></div>
+            <div class="chart-box"><h4>단말 준수 현황 (건수)</h4><canvas id="chart-devices"></canvas></div>
+          </div>
+
+          <h3>최근 30일 이벤트</h3>
+          <div class="table-scroll">
+            <table id="events-table">
+              <thead><tr><th>유형</th><th>날짜</th><th>건수</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <h3>설치 단말 목록</h3>
+          <p class="hint">확장이 설치되어 하트비트를 보낸 적 있는 단말. 운영체제/브라우저/계정은
+            관리형(엔터프라이즈) Chrome 프로필에서만 채워진다.</p>
+          <div class="table-scroll">
+            <table id="installs-table">
+              <thead><tr><th class="nowrap">설치 ID</th><th class="wrap">계정</th><th class="nowrap">OS</th><th class="wrap">브라우저</th><th class="nowrap">버전</th><th class="nowrap">최근 하트비트</th><th class="nowrap">상태</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <h3>비준수 단말 <span class="hint">(Fleet/osquery로 탐지된, 확장 미설치·비활성 단말)</span></h3>
+          <div class="table-scroll">
+            <table id="devices-table">
+              <thead><tr><th>호스트명</th><th>사용자</th><th>OS</th><th>사유</th><th>상태</th><th>탐지 시각</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-audit" class="hidden">
+        <div class="card">
+          <p class="hint">"누가 무엇을 위배했는지" 확인용 개별 이벤트 상세 목록 (최근 100건, 최신순).
+            대시보드의 유형별 집계와 달리 사용자·설치·검출 항목까지 전부 보여준다.</p>
+          <button id="refresh-audit-btn">새로고침</button>
+          <div class="table-scroll">
+            <table id="audit-table">
+              <thead>
+                <tr>
+                  <th class="nowrap">시각</th><th class="wrap">사용자</th><th class="nowrap">사이트</th>
+                  <th class="nowrap">유형</th><th class="nowrap">등급</th><th class="nowrap">점수</th>
+                  <th class="wrap">검출 항목</th><th class="wrap">파일</th><th class="nowrap">조치</th>
+                  <th class="nowrap">설치(버전)</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/chart.umd.min.js"></script>
+  <script>
+    const TOKEN_KEY = "aiguard_admin_token";
+    const EMAIL_KEY = "aiguard_admin_email";
+
+    function getToken() { return sessionStorage.getItem(TOKEN_KEY); }
+
+    async function apiFetch(path, opts) {
+      opts = opts || {};
+      opts.headers = Object.assign({}, opts.headers, { Authorization: "Bearer " + getToken() });
+      const res = await fetch(path, opts);
+      if (res.status === 401) {
+        sessionStorage.removeItem(TOKEN_KEY);
+        showLogin("세션이 만료되었습니다. 다시 로그인해주세요.");
+        throw new Error("unauthorized");
+      }
+      return res;
+    }
+
+    function showLogin(message) {
+      document.getElementById("app").classList.add("hidden");
+      document.getElementById("login-screen").classList.remove("hidden");
+      document.getElementById("login-msg").innerHTML = message ? `<div class="msg err">${message}</div>` : "";
+    }
+
+    function showApp() {
+      document.getElementById("login-screen").classList.add("hidden");
+      document.getElementById("app").classList.remove("hidden");
+      document.getElementById("whoami").textContent = sessionStorage.getItem(EMAIL_KEY) || "";
+      loadPolicy();
+    }
+
+    document.getElementById("login-btn").addEventListener("click", async () => {
+      const email = document.getElementById("login-email").value.trim();
+      const password = document.getElementById("login-password").value;
+      const msgEl = document.getElementById("login-msg");
+      msgEl.innerHTML = "";
+      try {
+        const res = await fetch("/api/v1/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        if (!res.ok) {
+          msgEl.innerHTML = '<div class="msg err">로그인 실패 — 이메일/비밀번호를 확인하세요.</div>';
+          return;
+        }
+        const data = await res.json();
+        sessionStorage.setItem(TOKEN_KEY, data.access_token);
+        sessionStorage.setItem(EMAIL_KEY, email);
+        document.getElementById("login-password").value = "";
+        showApp();
+      } catch (e) {
+        msgEl.innerHTML = '<div class="msg err">서버에 연결할 수 없습니다.</div>';
+      }
+    });
+
+    document.getElementById("logout-btn").addEventListener("click", () => {
+      sessionStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(EMAIL_KEY);
+      showLogin();
+    });
+
+    document.getElementById("tab-policy-btn").addEventListener("click", () => switchTab("policy"));
+    document.getElementById("tab-dashboard-btn").addEventListener("click", () => switchTab("dashboard"));
+    document.getElementById("tab-audit-btn").addEventListener("click", () => switchTab("audit"));
+
+    const TABS = ["policy", "dashboard", "audit"];
+
+    function switchTab(name) {
+      for (const t of TABS) {
+        document.getElementById(`tab-${t}`).classList.toggle("hidden", name !== t);
+        document.getElementById(`tab-${t}-btn`).classList.toggle("active", name === t);
+      }
+      if (name === "dashboard") loadDashboard();
+      if (name === "audit") loadAuditLog();
+    }
+
+    async function loadPolicy() {
+      const res = await apiFetch("/api/v1/policy");
+      const p = await res.json();
+      document.getElementById("policy-version").textContent = p.policyVersion;
+      document.getElementById("mode-prompt").value = p.mode.prompt;
+      document.getElementById("mode-file").value = p.mode.file;
+      document.getElementById("grade-profile").value = p.gradeProfile;
+      document.getElementById("heartbeat-min").value = p.heartbeatMin;
+      document.getElementById("log-masking").checked = !!p.logMasking;
+      document.getElementById("filecheck-content").checked = !!(p.fileCheck && p.fileCheck.contentScan);
+      document.getElementById("filecheck-mip").checked = !!(p.fileCheck && p.fileCheck.mipCheck);
+      document.getElementById("mip-deny-unlabeled").checked = !!(p.mipLabelMap && p.mipLabelMap.denyUnlabeled);
+      document.getElementById("mip-allow-o").value = ((p.mipLabelMap && p.mipLabelMap.allowO) || []).join(", ");
+      document.getElementById("msg-blocked").value = (p.userMessage && p.userMessage.blocked) || "";
+      document.getElementById("msg-confirm").value = (p.userMessage && p.userMessage.confirm) || "";
+      document.getElementById("sites-json").value = JSON.stringify(p.sites || [], null, 2);
+    }
+
+    document.getElementById("save-policy-btn").addEventListener("click", async () => {
+      const msgEl = document.getElementById("policy-msg");
+      msgEl.innerHTML = "";
+      let sites;
+      try {
+        sites = JSON.parse(document.getElementById("sites-json").value);
+      } catch (e) {
+        msgEl.innerHTML = '<div class="msg err">사이트 목록 JSON 형식이 올바르지 않습니다.</div>';
+        return;
+      }
+      const body = {
+        mode: {
+          prompt: document.getElementById("mode-prompt").value,
+          file: document.getElementById("mode-file").value,
+        },
+        sites,
+        gradeProfile: document.getElementById("grade-profile").value,
+        mipLabelMap: {
+          allowO: document.getElementById("mip-allow-o").value.split(",").map((s) => s.trim()).filter(Boolean),
+          denyUnlabeled: document.getElementById("mip-deny-unlabeled").checked,
+        },
+        fileCheck: {
+          contentScan: document.getElementById("filecheck-content").checked,
+          mipCheck: document.getElementById("filecheck-mip").checked,
+        },
+        userMessage: {
+          blocked: document.getElementById("msg-blocked").value,
+          confirm: document.getElementById("msg-confirm").value,
+        },
+        heartbeatMin: Number(document.getElementById("heartbeat-min").value),
+        logMasking: document.getElementById("log-masking").checked,
+      };
+      try {
+        const res = await apiFetch("/api/v1/policy", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const detail = await res.text();
+          msgEl.innerHTML = `<div class="msg err">저장 실패 (${res.status}): ${detail}</div>`;
+          return;
+        }
+        const updated = await res.json();
+        document.getElementById("policy-version").textContent = updated.policyVersion;
+        msgEl.innerHTML = `<div class="msg ok">저장됨 — 새 버전: ${updated.policyVersion}</div>`;
+      } catch (e) {
+        // apiFetch already handled the 401->relogin case; anything else is unexpected.
+        if (e.message !== "unauthorized") {
+          msgEl.innerHTML = '<div class="msg err">저장 중 오류가 발생했습니다.</div>';
+        }
+      }
+    });
+
+    // Reused across refreshes -- Chart.js instances must be destroyed before
+    // re-rendering onto the same <canvas>, or stale charts stack up invisibly
+    // and leak memory every time "새로고침" is clicked.
+    const charts = {};
+    function renderChart(canvasId, config) {
+      if (charts[canvasId]) charts[canvasId].destroy();
+      charts[canvasId] = new Chart(document.getElementById(canvasId), config);
+    }
+
+    const CHART_COLORS = { allow: "#16a34a", confirm: "#d97706", anon: "#2563eb", block: "#dc2626", compliant: "#16a34a", noncompliant: "#dc2626", stale: "#9aa0a6" };
+
+    function barConfig(labels, data, colors, label) {
+      return {
+        type: "bar",
+        data: { labels, datasets: [{ label, data, backgroundColor: colors }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+        },
+      };
+    }
+
+    // Rough UA parse for a compact "browser" column -- not meant to be a
+    // precise UA sniffer, just enough to tell Chrome/Edge/Firefox apart at a
+    // glance instead of dumping the full user-agent string into the table.
+    function parseBrowser(ua) {
+      if (!ua) return "-";
+      const m = ua.match(/(Edg|Chrome|Firefox|Safari)\/([\d.]+)/);
+      return m ? `${m[1] === "Edg" ? "Edge" : m[1]} ${m[2].split(".")[0]}` : ua.slice(0, 24);
+    }
+
+    async function loadDashboard() {
+      const res = await apiFetch("/api/v1/dashboard/summary");
+      const s = await res.json();
+      document.getElementById("stat-compliance").textContent = s.installCompliance.compliancePct + "%";
+      document.getElementById("stat-noncompliant").textContent = s.noncompliantCount;
+      document.getElementById("stat-prompt-rate").textContent = s.violationStats.prompt.violationRatePct + "%";
+      document.getElementById("stat-file-rate").textContent = s.violationStats.file.violationRatePct + "%";
+
+      const eventsBody = document.querySelector("#events-table tbody");
+      eventsBody.innerHTML = s.eventsByTypeDay.length
+        ? s.eventsByTypeDay.map((r) => `<tr><td>${r.type}</td><td>${r.date}</td><td>${r.count}</td></tr>`).join("")
+        : '<tr><td colspan="3">이벤트 없음</td></tr>';
+
+      const installsBody = document.querySelector("#installs-table tbody");
+      installsBody.innerHTML = s.installs.length
+        ? s.installs
+            .map((i) => `<tr>
+              <td class="nowrap">${escapeHtml(i.installId.slice(0, 8))}…</td>
+              <td class="wrap">${escapeHtml(i.user || "(미확인)")}</td>
+              <td class="nowrap">${escapeHtml(i.platform || "-")}</td>
+              <td class="wrap">${escapeHtml(parseBrowser(i.userAgent))}</td>
+              <td class="nowrap">${escapeHtml(i.version || "-")}</td>
+              <td class="nowrap">${escapeHtml(i.lastHeartbeatAt || "없음")}</td>
+              <td class="nowrap">${i.compliant ? "✅ 준수" : "⚠️ 비준수"}</td>
+            </tr>`)
+            .join("")
+        : '<tr><td colspan="7">설치된 단말 없음</td></tr>';
+
+      const devicesBody = document.querySelector("#devices-table tbody");
+      devicesBody.innerHTML = s.noncompliantDevices.length
+        ? s.noncompliantDevices
+            .map((d) => `<tr><td>${escapeHtml(d.hostname)}</td><td>${escapeHtml(d.username || "-")}</td><td>${escapeHtml(d.platform || "-")}</td><td>${escapeHtml(d.reason)}</td><td>${escapeHtml(d.status)}</td><td>${escapeHtml(d.detectedAt || "-")}</td></tr>`)
+            .join("")
+        : '<tr><td colspan="6">비준수 단말 없음</td></tr>';
+
+      const vp = s.violationStats.prompt, vf = s.violationStats.file;
+      renderChart("chart-violation", barConfig(
+        ["프롬프트", "파일"], [vp.violationRatePct, vf.violationRatePct],
+        [CHART_COLORS.confirm, CHART_COLORS.confirm], "위반율(%)",
+      ));
+      renderChart("chart-prompt-result", barConfig(
+        ["허용", "확인 후 전송", "익명화 후 전송", "차단"],
+        [vp.total - vp.violations, vp.confirmSent - vp.anonymizedSent, vp.anonymizedSent, vp.blocked],
+        [CHART_COLORS.allow, CHART_COLORS.confirm, CHART_COLORS.anon, CHART_COLORS.block], "건수",
+      ));
+      renderChart("chart-file-result", barConfig(
+        ["허용", "확인 후 전송", "차단"],
+        [vf.total - vf.violations, vf.confirmSent, vf.blocked],
+        [CHART_COLORS.allow, CHART_COLORS.confirm, CHART_COLORS.block], "건수",
+      ));
+      const staleInstalls = s.installCompliance.totalInstalls - s.installCompliance.compliantInstalls;
+      renderChart("chart-devices", barConfig(
+        ["준수 설치", "비준수 설치(하트비트 끊김)", "Fleet 미설치 단말"],
+        [s.installCompliance.compliantInstalls, staleInstalls, s.noncompliantCount],
+        [CHART_COLORS.compliant, CHART_COLORS.stale, CHART_COLORS.noncompliant], "건수",
+      ));
+    }
+
+    document.getElementById("refresh-dashboard-btn").addEventListener("click", loadDashboard);
+
+    // Event fields (user, site, detection samples) come from client-submitted
+    // data -- a compromised/malicious install could send HTML/script in them,
+    // so escape before interpolating into innerHTML.
+    function escapeHtml(s) {
+      return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      }[c]));
+    }
+
+    function renderDetections(detections) {
+      if (!detections || !detections.length) return "-";
+      // Each finding is its own nowrap <div> (see td.detections div CSS) so a
+      // masked sample like "90****-*******" never wraps mid-string inside
+      // its own parentheses -- only the gap *between* findings wraps.
+      return detections
+        .map((d) => {
+          const samples = (d.samples || []).map(escapeHtml).join(", ");
+          return `<div>${escapeHtml(d.type)} ×${d.count}${samples ? ` (${samples})` : ""}</div>`;
+        })
+        .join("");
+    }
+
+    async function loadAuditLog() {
+      const res = await apiFetch("/api/v1/events?limit=100");
+      const body = await res.json();
+      const tbody = document.querySelector("#audit-table tbody");
+      tbody.innerHTML = body.events.length
+        ? body.events
+            .map((e) => {
+              const file = e.file ? `${escapeHtml(e.file.name)}${e.file.grade ? ` (${escapeHtml(e.file.grade)})` : ""}` : "-";
+              const install = `${escapeHtml(e.installId.slice(0, 8))}… (${escapeHtml(e.installVersion || "?")})`;
+              return `<tr>
+                <td class="nowrap">${escapeHtml(e.ts)}</td>
+                <td class="wrap">${escapeHtml(e.user || "(미확인)")}</td>
+                <td class="nowrap">${escapeHtml(e.site || "-")}</td>
+                <td class="nowrap">${escapeHtml(e.type)}</td>
+                <td class="nowrap">${escapeHtml(e.grade || "-")}</td>
+                <td class="nowrap">${e.score != null ? e.score : "-"}</td>
+                <td class="wrap detections">${renderDetections(e.detections)}</td>
+                <td class="wrap">${file}</td>
+                <td class="nowrap">${escapeHtml(e.action)}</td>
+                <td class="nowrap">${install}</td>
+              </tr>`;
+            })
+            .join("")
+        : `<tr><td colspan="10">이벤트 없음</td></tr>`;
+    }
+
+    document.getElementById("refresh-audit-btn").addEventListener("click", loadAuditLog);
+
+    if (getToken()) {
+      showApp();
+    } else {
+      showLogin();
+    }
+  </script>
+</body>
+</html>

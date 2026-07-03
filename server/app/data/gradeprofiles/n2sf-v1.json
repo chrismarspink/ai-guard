@@ -1,0 +1,91 @@
+{
+  "gradeProfile": "n2sf-v1",
+  "generatedFrom": "profiles/data_classifier.py",
+  "thresholds": {
+    "cThreshold": 5.5,
+    "sThreshold": 0.75,
+    "bulkPiiThreshold": 10
+  },
+  "recognizers": [
+    {
+      "name": "KR_RRN",
+      "pattern": "\\b\\d{6}[-\\s]?[1-4]\\d{6}\\b",
+      "flags": "g",
+      "description": "Korean Resident Registration Number (주민등록번호)",
+      "validator": "kr_rrn_checksum",
+      "weight": 6.0
+    },
+    {
+      "name": "KR_PHONE",
+      "pattern": "\\b01[016789][-\\s]?\\d{3,4}[-\\s]?\\d{4}\\b",
+      "flags": "g",
+      "description": "Korean mobile phone number",
+      "validator": null,
+      "weight": 1.5
+    },
+    {
+      "name": "KR_ACCOUNT",
+      "pattern": "\\b\\d{2,6}[-\\s]\\d{2,6}[-\\s]\\d{2,8}\\b",
+      "flags": "g",
+      "description": "Korean bank account number (hyphenated groups)",
+      "validator": null,
+      "weight": 3.0
+    },
+    {
+      "name": "CREDIT_CARD",
+      "pattern": "\\b(?:\\d[ -]?){13,16}\\b",
+      "flags": "g",
+      "description": "Credit card number (Luhn-validated)",
+      "validator": "luhn",
+      "weight": 5.0
+    },
+    {
+      "name": "EMAIL",
+      "pattern": "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
+      "flags": "g",
+      "description": "Email address",
+      "validator": null,
+      "weight": 1.0
+    },
+    {
+      "name": "AWS_ACCESS_KEY",
+      "pattern": "\\b(?:AKIA|ASIA)[0-9A-Z]{16}\\b",
+      "flags": "g",
+      "description": "AWS Access Key ID",
+      "validator": null,
+      "weight": 6.0
+    },
+    {
+      "name": "AWS_SECRET_KEY",
+      "pattern": "(?<![A-Za-z0-9/+=])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])",
+      "flags": "g",
+      "description": "AWS Secret Access Key (heuristic, high false-positive without context)",
+      "validator": null,
+      "weight": 6.0
+    },
+    {
+      "name": "GENERIC_API_KEY",
+      "pattern": "\\b(?:api[_-]?key|secret|token)['\\\"]?\\s*[:=]\\s*['\\\"]?[A-Za-z0-9_\\-]{16,}['\\\"]?",
+      "flags": "gi",
+      "description": "Generic API key / secret / token assignment",
+      "validator": null,
+      "weight": 3.0
+    },
+    {
+      "name": "PRIVATE_KEY_BLOCK",
+      "pattern": "-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----",
+      "flags": "g",
+      "description": "PEM private key block header",
+      "validator": null,
+      "weight": 6.0
+    },
+    {
+      "name": "IPV4",
+      "pattern": "\\b(?:(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\b",
+      "flags": "g",
+      "description": "IPv4 address",
+      "validator": null,
+      "weight": 0.5
+    }
+  ]
+}

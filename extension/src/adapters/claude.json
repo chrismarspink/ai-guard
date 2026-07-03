@@ -1,0 +1,14 @@
+{
+  "_comment": "Selectors are DOM-derived best-effort and need periodic verification since Claude.ai's UI changes without notice (risk R1).",
+  "id": "claude",
+  "urls": ["https://claude.ai/*"],
+  "adapterVersion": "1.0.0",
+  "selectors": {
+    "input": "div[contenteditable=\"true\"]",
+    "sendButton": "button[aria-label=\"Send Message\"]",
+    "fileInput": "input[type=\"file\"]"
+  },
+  "endpoints": {
+    "uploadUrlPattern": "*://claude.ai/api/*upload*"
+  }
+}

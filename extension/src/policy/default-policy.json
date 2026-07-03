@@ -1,0 +1,31 @@
+{
+  "policyVersion": "2026-07-02T00:00:00Z",
+  "mode": { "prompt": "confirm", "file": "block" },
+  "sites": [
+    {
+      "id": "chatgpt",
+      "urls": ["https://chat.openai.com/*", "https://chatgpt.com/*"],
+      "adapterVersion": "1.0.0"
+    },
+    {
+      "id": "claude",
+      "urls": ["https://claude.ai/*"],
+      "adapterVersion": "1.0.0"
+    },
+    {
+      "id": "gemini",
+      "urls": ["https://gemini.google.com/*"],
+      "adapterVersion": "1.0.0"
+    }
+  ],
+  "gradeProfile": "n2sf-v1",
+  "mipLabelMap": { "allowO": [], "denyUnlabeled": true },
+  "fileCheck": { "contentScan": true, "mipCheck": false },
+  "userMessage": {
+    "blocked": "보안 정책에 따라 전송이 차단되었습니다. 보안팀에 보고됩니다.",
+    "confirm": "개인정보 의심 내용이 있습니다. 전송 시 로그가 저장되고 보안팀에 보고됩니다."
+  },
+  "heartbeatMin": 30,
+  "logMasking": true,
+  "serverBaseUrl": "http://localhost:8090"
+}

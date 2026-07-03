@@ -1,0 +1,48 @@
+services:
+  server:
+    build: .
+    ports:
+      # Host port 8090, not 8080: this machine already has an unrelated
+      # container (mitmproxy, from another project) bound to host 8080.
+      - "8090:8080"
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-ai_guard}:${POSTGRES_PASSWORD:-ai_guard}@postgres:5432/${POSTGRES_DB:-ai_guard}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me}
+      FLEET_WEBHOOK_SECRET: ${FLEET_WEBHOOK_SECRET:-dev-only-change-me}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+    # "started" (the default) only waits for the container process to launch,
+    # not for Postgres to accept connections yet -- the app has no DB-connect
+    # retry loop, so it crashes on that race. "service_healthy" makes compose
+    # actually wait for the healthchecks below first.
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ai_guard}
+      POSTGRES_USER: ${POSTGRES_USER:-ai_guard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ai_guard}
+    volumes:
+      - ai_guard_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ai_guard} -d ${POSTGRES_DB:-ai_guard}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  ai_guard_pgdata:

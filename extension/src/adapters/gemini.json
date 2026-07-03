@@ -1,0 +1,14 @@
+{
+  "_comment": "Selectors are DOM-derived best-effort and need periodic verification since Gemini's UI changes without notice (risk R1).",
+  "id": "gemini",
+  "urls": ["https://gemini.google.com/*"],
+  "adapterVersion": "1.0.0",
+  "selectors": {
+    "input": "rich-textarea .ql-editor",
+    "sendButton": "button.send-button",
+    "fileInput": "input[type=\"file\"]"
+  },
+  "endpoints": {
+    "uploadUrlPattern": "*://*.google.com/*upload*"
+  }
+}

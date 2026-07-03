@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>innoecm-ai-guard — 대시보드</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; color: #1a1a1a; }
+    h1 { font-size: 1.4rem; }
+    table { border-collapse: collapse; margin-bottom: 2rem; }
+    th, td { border: 1px solid #ccc; padding: 0.4rem 0.8rem; text-align: left; }
+    .stat { display: inline-block; margin-right: 2rem; }
+    .stat .value { font-size: 1.6rem; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>innoecm-ai-guard 정책/관리 서버 — 대시보드</h1>
+  <p><em>참고: 이 화면은 v1 임시 서버 렌더링 뷰입니다. 정식 목표는 기존 InnoECM 관리 콘솔(React)에 모듈로 통합하는 것입니다.</em></p>
+
+  <div>
+    <div class="stat">
+      <div class="value">{{ summary.installCompliance.compliancePct }}%</div>
+      <div>설치 준수율 ({{ summary.installCompliance.compliantInstalls }}/{{ summary.installCompliance.totalInstalls }})</div>
+    </div>
+    <div class="stat">
+      <div class="value">{{ summary.noncompliantCount }}</div>
+      <div>비준수 단말</div>
+    </div>
+  </div>
+
+  <h2>최근 30일 이벤트</h2>
+  <table>
+    <tr><th>유형</th><th>날짜</th><th>건수</th></tr>
+    {% for row in summary.eventsByTypeDay %}
+    <tr><td>{{ row.type }}</td><td>{{ row.date }}</td><td>{{ row.count }}</td></tr>
+    {% else %}
+    <tr><td colspan="3">이벤트 없음</td></tr>
+    {% endfor %}
+  </table>
+
+  <h2>비준수 단말</h2>
+  <table>
+    <tr><th>호스트명</th><th>사용자</th><th>사유</th><th>상태</th><th>탐지 시각</th></tr>
+    {% for d in summary.noncompliantDevices %}
+    <tr><td>{{ d.hostname }}</td><td>{{ d.username or "-" }}</td><td>{{ d.reason }}</td><td>{{ d.status }}</td><td>{{ d.detectedAt }}</td></tr>
+    {% else %}
+    <tr><td colspan="5">비준수 단말 없음</td></tr>
+    {% endfor %}
+  </table>
+</body>
+</html>

@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: policy
+spec:
+  name: innoecm-ai-guard installed and active
+  platform: windows,darwin,linux
+  critical: true
+  query: >
+    SELECT ce.identifier, ce.version, ce.state
+    FROM users u
+    JOIN chrome_extensions ce USING (uid)
+    WHERE ce.identifier = '${INNOECM_AI_GUARD_EXTENSION_ID}'
+      AND ce.state = 1;
+  description: >
+    Fails (0 rows) when no Chromium-based browser profile on the host has the
+    innoecm-ai-guard extension installed and enabled. Covers Chrome, Edge,
+    Brave and other Chromium forks via osquery's chrome_extensions table,
+    which reads extension manifests directly from disk — works even when the
+    browser isn't running.
+  resolution: >
+    Confirm the host received the Chrome Enterprise ExtensionInstallForcelist
+    policy (GPO/Google Admin Console). If the policy is present but this
+    check still fails, the user may have removed/disabled the extension or be
+    on an unmanaged browser profile — escalate per the non-compliance
+    workflow (see server /api/v1/fleet/webhook consumer).
+---
+apiVersion: v1
+kind: policy
+spec:
+  name: innoecm-ai-guard not on a stale known-bad version
+  platform: windows,darwin,linux
+  critical: false
+  query: >
+    SELECT ce.identifier, ce.version
+    FROM users u
+    JOIN chrome_extensions ce USING (uid)
+    WHERE ce.identifier = '${INNOECM_AI_GUARD_EXTENSION_ID}'
+      AND ce.state = 1
+      AND ce.version NOT IN (${INNOECM_AI_GUARD_BLOCKED_VERSIONS});
+  description: >
+    Fails when the extension is installed but pinned to a version on the
+    blocklist (e.g. one with a broken adapter or a withdrawn build). osquery
+    runs on plain SQLite, which has no semver comparator, so version
+    freshness is otherwise tracked via the extension's heartbeat
+    (POST /api/v1/install/heartbeat) rather than this policy.
+  resolution: >
+    Extension auto-updates via the Chrome Web Store / self-hosted update
+    manifest; if stuck, the browser's extension update check may be blocked
+    by network policy — verify update_url reachability.

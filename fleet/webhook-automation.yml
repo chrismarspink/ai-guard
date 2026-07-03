@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: config
+spec:
+  webhook_settings:
+    failing_policies_webhook:
+      enable_failing_policies_webhook: true
+      destination_url: "${INNOECM_AI_GUARD_SERVER_URL}/api/v1/fleet/webhook"
+      policy_ids:
+        - ${INNOECM_AI_GUARD_POLICY_ID}
+      host_batch_size: 100
