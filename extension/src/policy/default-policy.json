@@ -27,5 +27,5 @@
   },
   "heartbeatMin": 30,
   "logMasking": true,
-  "serverBaseUrl": "http://localhost:8090"
+  "serverBaseUrl": "https://chrismarspink-ai-guard-console.hf.space"
 }

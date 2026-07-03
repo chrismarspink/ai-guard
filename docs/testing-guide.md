@@ -105,9 +105,18 @@ npm install && npm run build
 `host_permissions`가 ChatGPT/Claude/Gemini 3개 사이트로 한정돼 있어, 해당 사이트를 열 때만 동작한다.
 
 관리형 정책(`chrome.storage.managed`)이 없으면 확장은 자동으로 `extension/src/policy/default-policy.json`
-값을 쓴다 — 즉 **기업 정책 배포 없이도 기본 동작을 그대로 테스트할 수 있다**. 로컬 서버로 하트비트/
-이벤트를 보내게 하려면 `default-policy.json`의 `serverBaseUrl`이 이미 `http://localhost:8090`로
-맞춰져 있으니 별도 수정이 필요 없다.
+값을 쓴다 — 즉 **기업 정책 배포 없이도 기본 동작을 그대로 테스트할 수 있다**.
+
+**2026-07-03부터 `serverBaseUrl` 기본값이 바뀌었다**: 데모용 공개 Hugging Face Space
+(`https://chrismarspink-ai-guard-console.hf.space`)를 가리킨다 — 확장을 그냥 로드하기만 해도
+바로 살아있는 서버와 통신하며 하트비트/이벤트가 실제로 쌓이는 걸 볼 수 있다. 이 문서 §1의
+**로컬** docker 서버로 테스트하고 싶다면(예: 서버 코드 자체를 수정하며 확인할 때), 셋 중 하나로
+바꿔야 한다:
+- `extension/src/policy/default-policy.json`의 `serverBaseUrl`을 `http://localhost:8090`으로
+  바꾸고 `npm run build` 재실행, 또는
+- 관리형 정책(`chrome.storage.managed`)으로 `serverBaseUrl`을 오버라이드(§3 참조), 또는
+- HF Space 배포본 자체가 SQLite/무료 티어라 슬립·데이터 초기화가 있으니, 지속적인 개발 중엔
+  로컬 서버 쪽이 더 편하다는 점 참고.
 
 ### 2.1 수동 테스트 체크리스트 — 프롬프트
 

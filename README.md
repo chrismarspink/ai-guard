@@ -6,6 +6,12 @@
 **문서**: 전체 산출물 설명은 [`docs/guide.md`](docs/guide.md), 강제 설치(GPO) 없이 로컬에서
 검증하는 방법은 [`docs/testing-guide.md`](docs/testing-guide.md) 참조.
 
+**라이브 데모**: 관리 콘솔이 Hugging Face Spaces에 떠 있다 —
+https://chrismarspink-ai-guard-console.hf.space/admin (무료 티어라 미사용 시 슬립, SQLite라
+재시작 시 데이터 초기화됨. `server/README.md` "Deploying a demo to Hugging Face Spaces" 참조).
+확장의 기본 `serverBaseUrl`도 이 주소를 가리키도록 바뀌었다 — 압축해제된 확장을 로드만 해도 바로
+이 서버와 통신한다.
+
 ## 구성
 
 | 경로 | 내용 | 실행 방식 |
@@ -160,6 +166,18 @@ fleetctl apply -f fleet/webhook-automation.yml
 - **관리 콘솔 표 레이아웃 버그 수정(2026-07-03)**: 감사 로그 표에서 마스킹된 검출값(예:
   `90****-*******`)이 좁은 열 폭 때문에 괄호 중간에서 줄바꿈되며 깨져 보였다. 열마다
   `nowrap`/`wrap` 클래스를 명시하고 표를 가로 스크롤 컨테이너로 감싸 해결했다.
+- **Hugging Face Spaces 데모 배포 + 확장 기본 서버 전환(2026-07-03)**: 무료 호스팅 요건에 따라
+  정책 서버를 HF Spaces에 배포했다(`server/Dockerfile.hf` — Postgres 대신 SQLite, Redis는 생략;
+  `server/deploy-to-hf.sh`로 배포). Docker Space는 컨테이너 하나만 띄우므로 `docker-compose.yml`
+  구성을 그대로 못 쓴다는 게 핵심 제약이었다. 확장의 기본 `serverBaseUrl`
+  (`default-policy.json`·`service-worker.ts`)도 이 배포 주소로 바꿔서, 압축해제된 확장을
+  로드하기만 해도 바로 살아있는 서버와 통신하도록 했다 — 로컬 서버로 테스트하려면
+  [`docs/testing-guide.md`](docs/testing-guide.md) §2의 오버라이드 방법을 따를 것. 배포 과정에서
+  겪은 별개 이슈 셋: ① HF 앱에 루트(`/`) 페이지가 없어 HF의 기본 임베드 뷰가 404를 보여줘서
+  `/`→`/admin` 리다이렉트를 추가했다, ② `hf auth login`의 Git Credential Manager 연동이
+  `git push`에 토큰을 제대로 못 넘겨 매번 멈춰서(GCM이 비밀번호 인증으로 폴백 → HF가 거부),
+  `deploy-to-hf.sh`가 `$HF_TOKEN` 환경변수를 직접 원격 URL에 실어 쓰도록 바꿨다, ③ Chart.js를
+  받아온 것과 마찬가지로 public 저장소/Space 생성은 시스템 안전장치가 명시적 확인을 요구했다.
 
 ## 검증 상태
 

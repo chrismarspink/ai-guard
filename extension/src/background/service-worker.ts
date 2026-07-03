@@ -2,7 +2,7 @@ import { classify } from "../engine/t1-engine";
 import { EVENT_FLUSH_RETRY_ALARM, enqueue, flush } from "../lib/event-queue";
 import { getPolicy, onPolicyChange, SERVER_POLICY_CACHE_KEY, type Policy } from "../policy/policy-loader";
 
-export const DEFAULT_SERVER_BASE_URL = "http://localhost:8090";
+export const DEFAULT_SERVER_BASE_URL = "https://chrismarspink-ai-guard-console.hf.space";
 
 const HEARTBEAT_ALARM = "innoecm-heartbeat";
 const FLUSH_ALARM = "innoecm-event-flush";
