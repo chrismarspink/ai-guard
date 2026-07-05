@@ -9,6 +9,6 @@
     "fileInput": "input[type=\"file\"]"
   },
   "endpoints": {
-    "uploadUrlPattern": "*://*.chatgpt.com/backend-api/*files*"
+    "uploadUrlPattern": "*://*chatgpt.com/backend-api/*files*"
   }
 }

@@ -54,3 +54,19 @@ def cache_delete(key: str) -> None:
         client.delete(key)
     except Exception:
         pass
+
+
+def incr_with_expiry(key: str, window_sec: int) -> int:
+    """Atomic INCR that sets the TTL on first hit -- for fixed-window rate
+    limiting. Returns the running count, or 0 when Redis is unavailable (so a
+    missing cache degrades to "no limit" rather than blocking requests)."""
+    client = _get_client()
+    if client is None:
+        return 0
+    try:
+        count = client.incr(key)
+        if count == 1:
+            client.expire(key, window_sec)
+        return int(count)
+    except Exception:
+        return 0

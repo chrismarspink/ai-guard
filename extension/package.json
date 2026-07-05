@@ -1,12 +1,16 @@
 {
   "name": "innoecm-ai-guard-extension",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Chrome MV3 extension: LLM prompt DLP + MIP-label-based upload control for innoecm-ai-guard",
   "scripts": {
     "dev": "node scripts/build.mjs",
     "build": "node scripts/build.mjs",
+    "bump": "node scripts/bump.mjs",
+    "bump:minor": "node scripts/bump.mjs minor",
+    "bump:major": "node scripts/bump.mjs major",
+    "release": "node scripts/bump.mjs patch && node scripts/build.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

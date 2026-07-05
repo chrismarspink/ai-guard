@@ -35,9 +35,9 @@
     },
     {
       "name": "KR_ACCOUNT",
-      "pattern": "\\b\\d{2,6}[-\\s]\\d{2,6}[-\\s]\\d{2,8}\\b",
+      "pattern": "\\b(?!01[016789][-\\s])\\d{2,6}[-\\s]\\d{2,6}[-\\s]\\d{2,8}\\b",
       "flags": "g",
-      "description": "Korean bank account number (hyphenated groups)",
+      "description": "Korean bank account number (hyphenated groups). Negative lookahead excludes mobile phone numbers (01x-xxxx-xxxx), which otherwise collide with the 3-group account shape and were forcing every phone number to grade C.",
       "validator": null,
       "weight": 6.0
     },
@@ -67,9 +67,9 @@
     },
     {
       "name": "AWS_SECRET_KEY",
-      "pattern": "(?<![A-Za-z0-9/+=])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])",
+      "pattern": "(?<![A-Za-z0-9/+=])(?=[A-Za-z0-9/+=]*[a-z])(?=[A-Za-z0-9/+=]*[A-Z])(?=[A-Za-z0-9/+=]*[0-9])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])",
       "flags": "g",
-      "description": "AWS Secret Access Key (heuristic, high false-positive without context)",
+      "description": "AWS Secret Access Key (40-char base64). Requires at least one lowercase, one uppercase, and one digit within the run so all-lowercase-hex git SHAs and other uniform-case 40-char tokens no longer false-positive as C.",
       "validator": null,
       "weight": 6.0
     },

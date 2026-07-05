@@ -25,7 +25,29 @@
       <div class="value">{{ summary.noncompliantCount }}</div>
       <div>비준수 단말</div>
     </div>
+    <div class="stat">
+      <div class="value">{{ summary.largeDocScans.truncated }}</div>
+      <div>대용량 스캔 일부만 분석 (전체 {{ summary.largeDocScans.withChunkInfo }}건 중)</div>
+    </div>
   </div>
+
+  <h2>설치 단말 (디바이스 · 계정)</h2>
+  <table>
+    <tr><th>계정</th><th>플랫폼</th><th>브라우저(User-Agent)</th><th>버전</th><th>활성</th><th>최근 하트비트</th><th>준수</th></tr>
+    {% for i in summary.installs %}
+    <tr>
+      <td>{{ i.user or "(미로그인)" }}</td>
+      <td>{{ i.platform or "-" }}</td>
+      <td>{{ i.userAgent or "-" }}</td>
+      <td>{{ i.version or "-" }}</td>
+      <td>{{ "예" if i.enabled else "아니오" }}</td>
+      <td>{{ i.lastHeartbeatAt or "-" }}</td>
+      <td>{{ "✅" if i.compliant else "⚠" }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7">등록된 설치 없음</td></tr>
+    {% endfor %}
+  </table>
 
   <h2>최근 30일 이벤트</h2>
   <table>

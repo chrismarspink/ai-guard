@@ -41,6 +41,24 @@
     .stat { display: inline-block; margin-right: 2.5rem; }
     .stat .value { font-size: 1.6rem; font-weight: bold; }
     .hint { color: #666; font-size: 0.8rem; margin-top: 0.2rem; }
+    /* Audit log: card-per-event so variable-width content (emails, user-agents,
+       masked samples) reads cleanly instead of overflowing a 10-column table. */
+    .audit-list { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.8rem; }
+    .audit-card { border: 1px solid #e0e0e0; border-radius: 10px; padding: 0.85rem 1rem; background: #fff; }
+    .audit-card .top { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+    .audit-card .time { color: #5f6368; font-size: 0.78rem; margin-left: auto; }
+    .badge { font-size: 0.75rem; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 999px; white-space: nowrap; }
+    .badge.g-O { background: #e6f4ea; color: #137333; }
+    .badge.g-S { background: #fef7e0; color: #b06000; }
+    .badge.g-C { background: #fce8e6; color: #c5221f; }
+    .badge.type { background: #e8f0fe; color: #1a56db; }
+    .badge.action { background: #f1f3f4; color: #3c4043; }
+    .audit-card .kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.4rem 1.2rem; }
+    .audit-card .kv > div { min-width: 0; }
+    .audit-card .k { color: #5f6368; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.02em; }
+    .audit-card .v { color: #202124; font-size: 0.85rem; word-break: break-word; }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.1rem; }
+    .chip { background: #f1f3f4; border-radius: 4px; padding: 0.05rem 0.4rem; font-size: 0.78rem; white-space: nowrap; }
     #login-screen { max-width: 360px; margin: 4rem auto; }
     .charts { display: flex; flex-wrap: wrap; gap: 1.2rem; margin: 1rem 0 1.5rem; }
     .chart-box { flex: 1 1 260px; min-width: 240px; }
@@ -186,19 +204,7 @@
           <p class="hint">"누가 무엇을 위배했는지" 확인용 개별 이벤트 상세 목록 (최근 100건, 최신순).
             대시보드의 유형별 집계와 달리 사용자·설치·검출 항목까지 전부 보여준다.</p>
           <button id="refresh-audit-btn">새로고침</button>
-          <div class="table-scroll">
-            <table id="audit-table">
-              <thead>
-                <tr>
-                  <th class="nowrap">시각</th><th class="wrap">사용자</th><th class="nowrap">사이트</th>
-                  <th class="nowrap">유형</th><th class="nowrap">등급</th><th class="nowrap">점수</th>
-                  <th class="wrap">검출 항목</th><th class="wrap">파일</th><th class="nowrap">조치</th>
-                  <th class="nowrap">설치(버전)</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
+          <div id="audit-list" class="audit-list"></div>
         </div>
       </section>
     </main>
@@ -455,43 +461,60 @@
       }[c]));
     }
 
+    const TYPE_LABEL = {
+      prompt_block: "프롬프트 차단", prompt_confirm_sent: "프롬프트 확인전송",
+      prompt_anonymized_sent: "마스킹 전송", file_block: "파일 차단",
+      file_confirm: "파일 확인", prompt_allowed: "프롬프트 허용",
+      file_allowed: "파일 허용", heartbeat: "하트비트",
+    };
+    const ACTION_LABEL = { blocked: "차단됨", user_confirmed: "사용자 확인 전송", allowed: "허용" };
+
+    function fmtTime(ts) {
+      return ts ? String(ts).slice(0, 16).replace("T", " ") : "-";
+    }
+
     function renderDetections(detections) {
-      if (!detections || !detections.length) return "-";
-      // Each finding is its own nowrap <div> (see td.detections div CSS) so a
-      // masked sample like "90****-*******" never wraps mid-string inside
-      // its own parentheses -- only the gap *between* findings wraps.
-      return detections
+      if (!detections || !detections.length) return '<div class="v">-</div>';
+      const chips = detections
         .map((d) => {
           const samples = (d.samples || []).map(escapeHtml).join(", ");
-          return `<div>${escapeHtml(d.type)} ×${d.count}${samples ? ` (${samples})` : ""}</div>`;
+          return `<span class="chip">${escapeHtml(d.type)} ×${d.count}${samples ? ` (${samples})` : ""}</span>`;
         })
         .join("");
+      return `<div class="chips">${chips}</div>`;
     }
 
     async function loadAuditLog() {
       const res = await apiFetch("/api/v1/events?limit=100");
       const body = await res.json();
-      const tbody = document.querySelector("#audit-table tbody");
-      tbody.innerHTML = body.events.length
-        ? body.events
-            .map((e) => {
-              const file = e.file ? `${escapeHtml(e.file.name)}${e.file.grade ? ` (${escapeHtml(e.file.grade)})` : ""}` : "-";
-              const install = `${escapeHtml(e.installId.slice(0, 8))}… (${escapeHtml(e.installVersion || "?")})`;
-              return `<tr>
-                <td class="nowrap">${escapeHtml(e.ts)}</td>
-                <td class="wrap">${escapeHtml(e.user || "(미확인)")}</td>
-                <td class="nowrap">${escapeHtml(e.site || "-")}</td>
-                <td class="nowrap">${escapeHtml(e.type)}</td>
-                <td class="nowrap">${escapeHtml(e.grade || "-")}</td>
-                <td class="nowrap">${e.score != null ? e.score : "-"}</td>
-                <td class="wrap detections">${renderDetections(e.detections)}</td>
-                <td class="wrap">${file}</td>
-                <td class="nowrap">${escapeHtml(e.action)}</td>
-                <td class="nowrap">${install}</td>
-              </tr>`;
-            })
-            .join("")
-        : `<tr><td colspan="10">이벤트 없음</td></tr>`;
+      const list = document.getElementById("audit-list");
+      if (!body.events.length) { list.innerHTML = '<p class="hint">이벤트 없음</p>'; return; }
+      list.innerHTML = body.events
+        .map((e) => {
+          const grade = e.grade || "-";
+          const gradeBadge = ["O", "S", "C"].includes(grade) ? `<span class="badge g-${grade}">${grade}</span>` : "";
+          const device = [e.platform, parseBrowser(e.userAgent)].filter(Boolean).join(" · ") || "-";
+          const file = e.file ? `${escapeHtml(e.file.name)}${e.file.grade ? ` (${escapeHtml(e.file.grade)})` : ""}` : "-";
+          const install = `${escapeHtml(e.installId.slice(0, 8))}… (${escapeHtml(e.installVersion || "?")})`;
+          return `<div class="audit-card">
+            <div class="top">
+              <span class="badge type">${escapeHtml(TYPE_LABEL[e.type] || e.type)}</span>
+              ${gradeBadge}
+              <span class="badge action">${escapeHtml(ACTION_LABEL[e.action] || e.action)}</span>
+              <span class="time">${escapeHtml(fmtTime(e.ts))}</span>
+            </div>
+            <div class="kv">
+              <div><div class="k">사용자</div><div class="v">${escapeHtml(e.user || "(미확인)")}</div></div>
+              <div><div class="k">사이트</div><div class="v">${escapeHtml(e.site || "-")}</div></div>
+              <div><div class="k">점수</div><div class="v">${e.score != null ? e.score : "-"}</div></div>
+              <div><div class="k">디바이스</div><div class="v">${escapeHtml(device)}</div></div>
+              <div><div class="k">파일</div><div class="v">${file}</div></div>
+              <div><div class="k">설치(버전)</div><div class="v">${install}</div></div>
+              <div style="grid-column: 1 / -1"><div class="k">검출 항목</div>${renderDetections(e.detections)}</div>
+            </div>
+          </div>`;
+        })
+        .join("");
     }
 
     document.getElementById("refresh-audit-btn").addEventListener("click", loadAuditLog);

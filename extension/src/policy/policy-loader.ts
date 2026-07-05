@@ -22,6 +22,19 @@ export interface Policy {
   heartbeatMin: number;
   logMasking: boolean;
   serverBaseUrl?: string;
+  // Optional neural classifier (classifier-svc). When set, file content is
+  // graded by the mDeBERTa-backed service, which handles large documents via
+  // server-side token windowing. Falls back to the bundled local T1 engine
+  // when unset or unreachable, so uploads are never left ungated.
+  classifier?: { url: string; locale?: string; neuralBackend?: string };
+  // Org enrollment secret for install/register (P4). Distributed via managed
+  // (GPO/MDM) storage since registration happens before any server policy is
+  // fetched; the extension sends it as X-Enroll-Secret when present.
+  enrollSecret?: string;
+  // Account (email) collection mode. "off" disables it org-wide; "consent"
+  // (default) collects the signed-in account email ONLY after the user opts in
+  // via the options page. Device info (OS/browser) is always collected.
+  accountCollection?: "off" | "consent";
 }
 
 // Bundled fallback used whenever no enterprise (managed) policy has been

@@ -40,6 +40,11 @@ class PolicyIn(BaseModel):
     user_message: dict = Field(alias="userMessage")
     heartbeat_min: int = Field(alias="heartbeatMin")
     log_masking: bool = Field(alias="logMasking")
+    # Optional: neural classifier config ({url, locale, neuralBackend}) and the
+    # console base URL. Absent on older console clients, so both default to None.
+    classifier: dict | None = None
+    server_base_url: str | None = Field(default=None, alias="serverBaseUrl")
+    account_collection: str | None = Field(default=None, alias="accountCollection")
 
 
 DEFAULT_FILE_CHECK = {"contentScan": True, "mipCheck": False}
@@ -56,6 +61,11 @@ def policy_to_dict(policy: Policy) -> dict:
         "userMessage": policy.user_message or {},
         "heartbeatMin": policy.heartbeat_min,
         "logMasking": policy.log_masking,
+        # Only surface these when set, so a policy that doesn't configure them
+        # doesn't override the extension's bundled defaults with nulls.
+        **({"serverBaseUrl": policy.server_base_url} if policy.server_base_url else {}),
+        **({"classifier": policy.classifier} if policy.classifier else {}),
+        **({"accountCollection": policy.account_collection} if policy.account_collection else {}),
     }
 
 
@@ -118,6 +128,9 @@ def put_policy(
         user_message=body.user_message,
         heartbeat_min=body.heartbeat_min,
         log_masking=body.log_masking,
+        classifier=body.classifier,
+        server_base_url=body.server_base_url,
+        account_collection=body.account_collection,
         is_current=True,
         updated_by=admin.email,
     )

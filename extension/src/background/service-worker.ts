@@ -1,6 +1,11 @@
+import { BUILD_INFO } from "../build-info";
 import { classify } from "../engine/t1-engine";
 import { EVENT_FLUSH_RETRY_ALARM, enqueue, flush } from "../lib/event-queue";
 import { getPolicy, onPolicyChange, SERVER_POLICY_CACHE_KEY, type Policy } from "../policy/policy-loader";
+
+// Logged on every service-worker start so the running build (version + date) is
+// visible in the extension's service-worker devtools console.
+console.info(`[innoecm-ai-guard] v${BUILD_INFO.version} build ${BUILD_INFO.buildId} (${BUILD_INFO.buildDate})`);
 
 export const DEFAULT_SERVER_BASE_URL = "https://chrismarspink-ai-guard-console.hf.space";
 
@@ -21,11 +26,27 @@ function authHeaders(creds: InstallCredentials): Record<string, string> {
   return { Authorization: `Bearer ${creds.token}`, "X-Install-Id": creds.installId };
 }
 
+// The enrollment secret (P4) is read from managed (GPO/MDM) storage, not the
+// server policy: registration is the bootstrap step that runs *before* any
+// server policy is fetched, so the credential has to be available offline.
+async function getEnrollSecret(): Promise<string | undefined> {
+  try {
+    const managed = await chrome.storage.managed.get("enrollSecret");
+    const secret = (managed as { enrollSecret?: unknown }).enrollSecret;
+    return typeof secret === "string" && secret ? secret : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function registerInstall(baseUrl: string): Promise<InstallCredentials | null> {
   try {
+    const enrollSecret = await getEnrollSecret();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (enrollSecret) headers["X-Enroll-Secret"] = enrollSecret;
     const res = await fetch(`${baseUrl}/api/v1/install/register`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ version: chrome.runtime.getManifest().version }),
     });
     if (!res.ok) return null;
@@ -55,25 +76,37 @@ async function forgetInstallCredentials(): Promise<void> {
 
 let cachedProfileEmail: string | null = null;
 
-// "identity.email" (not full "identity"/OAuth) only asks Chrome for the
-// signed-in profile's account info, no consent screen needed. Called with no
-// `accountStatus` override, getProfileUserInfo only returns an email for a
-// Chrome-managed (enterprise) profile -- personal/unmanaged profiles get ""
-// -- which is the right default for a workplace DLP tool: it shouldn't pull
-// a user's personal Gmail out of an unmanaged browser just because they
-// sideloaded this extension. This is *who sent this event*, cached for the
-// life of the service worker since it can't change mid-session.
+// Account (email) collection is privacy-gated: only called after the user has
+// consented (see accountEmailIfAllowed). accountStatus:'ANY' returns the
+// signed-in workplace account's email even without Chrome sync, which is what
+// we want once consent is given. Cached for the service worker's life.
 export async function getProfileEmail(): Promise<string> {
   if (cachedProfileEmail !== null) return cachedProfileEmail;
   try {
     const info = await new Promise<{ email: string; id: string }>((resolve) => {
-      chrome.identity.getProfileUserInfo((result) => resolve(result));
+      chrome.identity.getProfileUserInfo(
+        { accountStatus: "ANY" as chrome.identity.AccountStatus },
+        (result) => resolve(result),
+      );
     });
     cachedProfileEmail = info.email || "";
   } catch {
     cachedProfileEmail = "";
   }
   return cachedProfileEmail;
+}
+
+// Consent gate for account collection. Device info (platform/UA) is always
+// collected; the account email is collected ONLY when the org policy permits
+// it (accountCollection !== "off") AND the user has explicitly consented via
+// the options page. Default (no consent) => no email, device only.
+const ACCOUNT_CONSENT_KEY = "accountConsent";
+
+async function accountEmailIfAllowed(policy: Policy): Promise<string> {
+  if (policy.accountCollection === "off") return "";
+  const { [ACCOUNT_CONSENT_KEY]: consent } = await chrome.storage.local.get(ACCOUNT_CONSENT_KEY);
+  if (consent !== true) return "";
+  return getProfileEmail();
 }
 
 let cachedPlatform: string | null = null;
@@ -96,7 +129,7 @@ export async function sendHeartbeat(): Promise<void> {
   const creds = await getInstallCredentials(baseUrl);
   if (!creds) return; // server unreachable / registration failed -- retried next alarm tick
 
-  const [platform, email] = await Promise.all([getPlatform(), getProfileEmail()]);
+  const [platform, email] = await Promise.all([getPlatform(), accountEmailIfAllowed(policy)]);
   try {
     const res = await fetch(`${baseUrl}/api/v1/install/heartbeat`, {
       method: "POST",
@@ -160,7 +193,11 @@ async function initialize(): Promise<void> {
   await fetchAndCachePolicy();
 }
 
-chrome.runtime.onInstalled.addListener(() => void initialize());
+chrome.runtime.onInstalled.addListener((details) => {
+  void initialize();
+  // Prompt for account-collection consent once, on first install.
+  if (details.reason === "install") chrome.runtime.openOptionsPage();
+});
 chrome.runtime.onStartup.addListener(() => void initialize());
 
 onPolicyChange(() => void scheduleHeartbeatAlarm());
@@ -195,7 +232,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.type === "LOG_EVENT") {
     void (async () => {
-      const email = await getProfileEmail();
+      const policy = await getPolicy();
+      const email = await accountEmailIfAllowed(policy);
       const event = { ...message.event };
       if (email && !event.user) event.user = email;
       await enqueue(event);
