@@ -116,7 +116,7 @@ export function showDialog(opts: DialogOptions): Promise<DialogChoice> {
       .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2147483647;
                  display: flex; align-items: center; justify-content: center; font-family: sans-serif; }
       .box { background: #fff; border-radius: 8px; padding: 24px; width: 440px; max-width: 92vw;
-             max-height: 86vh; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+             max-height: 86vh; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.3); color: #202124; }
       .head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
       .grade-badge { display: inline-block; font-size: 13px; font-weight: 700; padding: 3px 10px;
                      border-radius: 4px; color: #fff; }
@@ -139,7 +139,7 @@ export function showDialog(opts: DialogOptions): Promise<DialogChoice> {
       .audit-notice { font-size: 12px; color: #5f6368; background: #f1f3f4; border-radius: 6px;
                       padding: 8px 10px; margin-top: 14px; }
       .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
-      button { font-size: 13px; padding: 8px 16px; border-radius: 6px; border: 1px solid #ccc; cursor: pointer; background: #f1f3f4; }
+      button { font-size: 13px; padding: 8px 16px; border-radius: 6px; border: 1px solid #ccc; cursor: pointer; background: #f1f3f4; color: #202124; }
       button.primary { background: #1a73e8; color: #fff; border-color: #1a73e8; }
       button.anonymize { background: #e6f4ea; color: #1e6b34; border-color: #b7dfc2; }
       .build-info { font-size: 10px; color: #9aa0a6; margin-top: 10px; text-align: right; }
