@@ -158,8 +158,12 @@ def list_events(
         .limit(limit)
         .all()
     )
-    install_versions = {
-        i.install_id: i.version
+    # Join the Install rows so each event line can show the device/account the
+    # extension reports on heartbeat (platform, userAgent, signed-in email) --
+    # the event row itself only carries an opaque install_id, so device/account
+    # were previously not visible in the log.
+    installs = {
+        i.install_id: i
         for i in db.query(Install).filter(Install.install_id.in_([r.install_id for r in rows])).all()
     }
     return {
@@ -169,8 +173,12 @@ def list_events(
                 "id": r.id,
                 "type": r.type.value,
                 "installId": r.install_id,
-                "installVersion": install_versions.get(r.install_id),
-                "user": r.user_upn,
+                "installVersion": installs[r.install_id].version if r.install_id in installs else None,
+                # Account: prefer the value on the event; fall back to the
+                # signed-in Chrome email captured on the install's heartbeat.
+                "user": r.user_upn or (installs[r.install_id].user_upn if r.install_id in installs else None),
+                "platform": installs[r.install_id].platform if r.install_id in installs else None,
+                "userAgent": installs[r.install_id].user_agent if r.install_id in installs else None,
                 "site": r.site,
                 "grade": r.grade,
                 "score": r.score,

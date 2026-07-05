@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     # P10: if set, high-severity events (blocks / grade C) are POSTed here as a
     # JSON alert (Slack-compatible / generic SIEM webhook). Unset = no alerts.
     ALERT_WEBHOOK_URL: str | None = None
+    # P4: install enrollment hardening. When a secret is set, /install/register
+    # requires it in the X-Enroll-Secret header (distribute via managed policy);
+    # unset keeps registration open for dev. Registrations are also rate-limited
+    # per client IP (best-effort, needs Redis; a no-op when Redis is absent).
+    INSTALL_ENROLLMENT_SECRET: str | None = None
+    INSTALL_REGISTER_RATE_PER_HOUR: int = 60
 
     @model_validator(mode="after")
     def _forbid_default_secrets_in_production(self):
