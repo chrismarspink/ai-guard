@@ -27,6 +27,10 @@ export interface Policy {
   // server-side token windowing. Falls back to the bundled local T1 engine
   // when unset or unreachable, so uploads are never left ungated.
   classifier?: { url: string; locale?: string; neuralBackend?: string };
+  // Org enrollment secret for install/register (P4). Distributed via managed
+  // (GPO/MDM) storage since registration happens before any server policy is
+  // fetched; the extension sends it as X-Enroll-Secret when present.
+  enrollSecret?: string;
 }
 
 // Bundled fallback used whenever no enterprise (managed) policy has been

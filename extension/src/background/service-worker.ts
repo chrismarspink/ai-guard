@@ -21,11 +21,27 @@ function authHeaders(creds: InstallCredentials): Record<string, string> {
   return { Authorization: `Bearer ${creds.token}`, "X-Install-Id": creds.installId };
 }
 
+// The enrollment secret (P4) is read from managed (GPO/MDM) storage, not the
+// server policy: registration is the bootstrap step that runs *before* any
+// server policy is fetched, so the credential has to be available offline.
+async function getEnrollSecret(): Promise<string | undefined> {
+  try {
+    const managed = await chrome.storage.managed.get("enrollSecret");
+    const secret = (managed as { enrollSecret?: unknown }).enrollSecret;
+    return typeof secret === "string" && secret ? secret : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function registerInstall(baseUrl: string): Promise<InstallCredentials | null> {
   try {
+    const enrollSecret = await getEnrollSecret();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (enrollSecret) headers["X-Enroll-Secret"] = enrollSecret;
     const res = await fetch(`${baseUrl}/api/v1/install/register`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ version: chrome.runtime.getManifest().version }),
     });
     if (!res.ok) return null;

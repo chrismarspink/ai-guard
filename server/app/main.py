@@ -7,7 +7,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 import app.models  # noqa: F401  registers all tables on Base before create_all
-from app.api import admin_ui, auth, classifier, dashboard, events, fleet, gradeprofile, install, policy
+from app.api import admin_ui, audit, auth, classifier, dashboard, events, fleet, gradeprofile, install, policy
 from app.core import db, seed
 from app.core.config import settings
 
@@ -78,6 +78,7 @@ app.include_router(install.router, prefix="/api/v1")
 app.include_router(fleet.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
 app.include_router(classifier.router, prefix="/api/v1")
+app.include_router(audit.router, prefix="/api/v1")
 # No /api/v1 prefix: this is a console page (its own JS calls the /api/v1/*
 # endpoints with absolute paths), not part of the API surface itself.
 app.include_router(admin_ui.router)

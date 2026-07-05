@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import require_admin
 from app.core.config import settings
 from app.core.db import get_session
+from app.models.audit_log import AuditLog
 from app.models.noncompliant_device import NoncompliantDevice
 
 router = APIRouter(prefix="/fleet", tags=["fleet"])
@@ -35,6 +36,8 @@ def fleet_webhook(body: dict = Body(...), db: Session = Depends(get_session)):
 
     device = NoncompliantDevice(hostname=hostname, username=username, reason=reason, platform=platform, raw_payload=body)
     db.add(device)
+    db.add(AuditLog(actor="fleet", action="noncompliant_device_reported",
+                    detail={"hostname": hostname, "username": username, "reason": reason}))
     db.commit()
     db.refresh(device)
     return {"id": device.id}
