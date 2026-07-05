@@ -32,14 +32,15 @@ def _violation_stats(db: Session, since: dt.datetime, category_types: list, bloc
     # did about it (even an audit-mode pass-through of a C-grade prompt is
     # still a violation for this rate -- it just wasn't blocked). Separate
     # from blocked/confirmSent, which are about the *action taken*.
-    base = db.query(GuardEvent).filter(GuardEvent.ts >= since, GuardEvent.type.in_(category_types))
+    # Window on received_at (server time), not the client-reported ts (P8).
+    base = db.query(GuardEvent).filter(GuardEvent.received_at >= since, GuardEvent.type.in_(category_types))
     total = base.count()
     violations = base.filter(GuardEvent.grade.in_(["S", "C"])).count()
     blocked = db.query(GuardEvent).filter(
-        GuardEvent.ts >= since, GuardEvent.type == block_type
+        GuardEvent.received_at >= since, GuardEvent.type == block_type
     ).count()
     confirm_sent = db.query(GuardEvent).filter(
-        GuardEvent.ts >= since,
+        GuardEvent.received_at >= since,
         GuardEvent.type.in_(sent_types),
         GuardEvent.action == EventAction.user_confirmed,
     ).count()
@@ -56,9 +57,9 @@ def build_summary(db: Session) -> dict:
     since = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=30)
 
     rows = (
-        db.query(GuardEvent.type, func.date(GuardEvent.ts), func.count(GuardEvent.id))
-        .filter(GuardEvent.ts >= since)
-        .group_by(GuardEvent.type, func.date(GuardEvent.ts))
+        db.query(GuardEvent.type, func.date(GuardEvent.received_at), func.count(GuardEvent.id))
+        .filter(GuardEvent.received_at >= since)
+        .group_by(GuardEvent.type, func.date(GuardEvent.received_at))
         .all()
     )
     events_by_type_day = [
@@ -119,7 +120,7 @@ def build_summary(db: Session) -> dict:
     # "user chose to send after being flagged") -- broken out separately too
     # since it's a distinct enough action to be worth its own chart series.
     violation_stats["prompt"]["anonymizedSent"] = db.query(GuardEvent).filter(
-        GuardEvent.ts >= since,
+        GuardEvent.received_at >= since,
         GuardEvent.type == EventType.prompt_anonymized_sent,
         GuardEvent.action == EventAction.user_confirmed,
     ).count()

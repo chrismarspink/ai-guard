@@ -29,6 +29,11 @@ class Policy(Base):
     user_message = Column(JSON, nullable=False, default=dict)
     heartbeat_min = Column(Integer, nullable=False, default=30)
     log_masking = Column(Boolean, nullable=False, default=True)
+    # Optional neural classifier (classifier-svc / mDeBERTa) config and the
+    # console base URL the extension reports to. Both are consumed by the
+    # extension's policy loader; nullable so pre-existing rows load unchanged.
+    classifier = Column(JSON, nullable=True)
+    server_base_url = Column(String, nullable=True)
     # Explicit flag rather than "latest by updated_at" so the "current" row is
     # an unambiguous, indexed lookup even if two updates land in the same tick.
     is_current = Column(Boolean, nullable=False, default=False, index=True)

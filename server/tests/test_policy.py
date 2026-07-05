@@ -77,3 +77,30 @@ def test_put_policy_with_admin_bumps_version(client):
 
     refreshed = client.get("/api/v1/policy", headers=install_headers(install_id, token)).json()
     assert refreshed["policyVersion"] == new["policyVersion"]
+
+
+def test_put_policy_round_trips_classifier_config(client):
+    # P1: the console can push the neural (mDeBERTa) classifier config, and the
+    # extension reads it back via GET /policy.
+    body = {
+        **SAMPLE_POLICY_BODY,
+        "classifier": {"url": "http://classifier:10030", "locale": "ko", "neuralBackend": "mdeberta"},
+        "serverBaseUrl": "https://console.example",
+    }
+    r = client.put("/api/v1/policy", json=body, headers=admin_headers(client))
+    assert r.status_code == 200
+    assert r.json()["classifier"]["neuralBackend"] == "mdeberta"
+
+    install_id, token = register_install(client)
+    got = client.get("/api/v1/policy", headers=install_headers(install_id, token)).json()
+    assert got["classifier"] == {"url": "http://classifier:10030", "locale": "ko", "neuralBackend": "mdeberta"}
+    assert got["serverBaseUrl"] == "https://console.example"
+
+
+def test_policy_omits_classifier_when_unset(client):
+    # A policy that doesn't set classifier/serverBaseUrl must not emit null keys
+    # that would clobber the extension's bundled defaults.
+    r = client.put("/api/v1/policy", json=SAMPLE_POLICY_BODY, headers=admin_headers(client))
+    assert r.status_code == 200
+    assert "classifier" not in r.json()
+    assert "serverBaseUrl" not in r.json()

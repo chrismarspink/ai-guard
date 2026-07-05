@@ -93,9 +93,12 @@ def list_events(
     # a self-inflicted DoS as event volume grows.
     limit = min(max(limit, 1), 500)
     offset = max(offset, 0)
+    # Order by server receive time, not the client-reported `ts` (which the
+    # extension sets and could be skewed/backdated) -- received_at is the
+    # authoritative, tamper-resistant ordering key (P8).
     rows = (
         db.query(GuardEvent)
-        .order_by(GuardEvent.ts.desc())
+        .order_by(GuardEvent.received_at.desc())
         .offset(offset)
         .limit(limit)
         .all()
