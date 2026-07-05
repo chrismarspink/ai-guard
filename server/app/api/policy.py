@@ -44,6 +44,7 @@ class PolicyIn(BaseModel):
     # console base URL. Absent on older console clients, so both default to None.
     classifier: dict | None = None
     server_base_url: str | None = Field(default=None, alias="serverBaseUrl")
+    account_collection: str | None = Field(default=None, alias="accountCollection")
 
 
 DEFAULT_FILE_CHECK = {"contentScan": True, "mipCheck": False}
@@ -64,6 +65,7 @@ def policy_to_dict(policy: Policy) -> dict:
         # doesn't override the extension's bundled defaults with nulls.
         **({"serverBaseUrl": policy.server_base_url} if policy.server_base_url else {}),
         **({"classifier": policy.classifier} if policy.classifier else {}),
+        **({"accountCollection": policy.account_collection} if policy.account_collection else {}),
     }
 
 
@@ -128,6 +130,7 @@ def put_policy(
         log_masking=body.log_masking,
         classifier=body.classifier,
         server_base_url=body.server_base_url,
+        account_collection=body.account_collection,
         is_current=True,
         updated_by=admin.email,
     )

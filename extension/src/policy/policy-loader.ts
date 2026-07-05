@@ -31,6 +31,10 @@ export interface Policy {
   // (GPO/MDM) storage since registration happens before any server policy is
   // fetched; the extension sends it as X-Enroll-Secret when present.
   enrollSecret?: string;
+  // Account (email) collection mode. "off" disables it org-wide; "consent"
+  // (default) collects the signed-in account email ONLY after the user opts in
+  // via the options page. Device info (OS/browser) is always collected.
+  accountCollection?: "off" | "consent";
 }
 
 // Bundled fallback used whenever no enterprise (managed) policy has been

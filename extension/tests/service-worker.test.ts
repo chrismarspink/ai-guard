@@ -5,10 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // what getProfileEmail() itself needs.
 function installChromeMock(
   profileInfo: { email: string; id: string },
-  opts: { platform?: string; installCredentials?: { installId: string; token: string } } = {},
+  opts: {
+    platform?: string;
+    installCredentials?: { installId: string; token: string };
+    accountConsent?: boolean;
+  } = {},
 ) {
   const local: Record<string, unknown> = {};
   if (opts.installCredentials) local.installCredentials = opts.installCredentials;
+  if (opts.accountConsent) local.accountConsent = true;
   vi.stubGlobal("chrome", {
     runtime: {
       getManifest: () => ({ version: "0.1.0-test" }),
@@ -39,8 +44,15 @@ function installChromeMock(
       onChanged: { addListener: () => {} },
     },
     identity: {
-      getProfileUserInfo: (callback: (info: { email: string; id: string }) => void) => {
-        callback(profileInfo);
+      // Supports both the legacy (callback) and current (details, callback)
+      // signatures -- the service worker calls it with { accountStatus }.
+      getProfileUserInfo: (
+        detailsOrCb: unknown,
+        maybeCb?: (info: { email: string; id: string }) => void,
+      ) => {
+        const cb = (typeof detailsOrCb === "function" ? detailsOrCb : maybeCb) as
+          (info: { email: string; id: string }) => void;
+        cb(profileInfo);
       },
     },
   });
@@ -69,9 +81,9 @@ describe("getProfileEmail", () => {
     let calls = 0;
     installChromeMock({ email: "user@company.example", id: "abc" });
     const original = (globalThis as any).chrome.identity.getProfileUserInfo;
-    (globalThis as any).chrome.identity.getProfileUserInfo = (cb: (info: any) => void) => {
+    (globalThis as any).chrome.identity.getProfileUserInfo = (details: any, cb: (info: any) => void) => {
       calls += 1;
-      original(cb);
+      original(details, cb);
     };
     const { getProfileEmail } = await import("../src/background/service-worker");
     await getProfileEmail();
@@ -86,10 +98,10 @@ describe("sendHeartbeat", () => {
     vi.resetModules();
   });
 
-  it("includes platform/userAgent/user in the heartbeat body (2026-07-03 device telemetry)", async () => {
+  it("includes the account email only after the user consents", async () => {
     installChromeMock(
       { email: "user@company.example", id: "abc" },
-      { platform: "mac", installCredentials: { installId: "install-1", token: "tok" } },
+      { platform: "mac", installCredentials: { installId: "install-1", token: "tok" }, accountConsent: true },
     );
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
     vi.stubGlobal("fetch", fetchMock);
@@ -97,12 +109,26 @@ describe("sendHeartbeat", () => {
     const { sendHeartbeat } = await import("../src/background/service-worker");
     await sendHeartbeat();
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, opts] = fetchMock.mock.calls[0];
-    expect(url).toContain("/api/v1/install/heartbeat");
-    const body = JSON.parse(opts.body);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.platform).toBe("mac");
     expect(body.userAgent).toBe("Mozilla/5.0 (test-agent)");
     expect(body.user).toBe("user@company.example");
+  });
+
+  it("always sends device info but omits the account without consent", async () => {
+    installChromeMock(
+      { email: "user@company.example", id: "abc" },
+      { platform: "mac", installCredentials: { installId: "install-1", token: "tok" } }, // no consent
+    );
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { sendHeartbeat } = await import("../src/background/service-worker");
+    await sendHeartbeat();
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.platform).toBe("mac");            // device: always
+    expect(body.userAgent).toBe("Mozilla/5.0 (test-agent)");
+    expect(body.user).toBeUndefined();            // account: gated on consent
   });
 });

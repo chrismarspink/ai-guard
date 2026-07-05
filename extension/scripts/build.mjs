@@ -23,6 +23,9 @@ async function buildEntry({ input, outDir, fileName, format }) {
     root: rootDir,
     configFile: false,
     logLevel: "warn",
+    // Don't let each entry build copy public/ into its own outDir (that created
+    // nested dist/<entry>/options/ dirs) -- public assets are copied once below.
+    publicDir: false,
     define: { __BUILD_INFO__: JSON.stringify(BUILD_INFO) },
     build: {
       outDir: path.join("dist", outDir),
@@ -65,6 +68,14 @@ async function main() {
     outDir: "content",
     fileName: "injected.js",
     format: "iife",
+  });
+
+  // Options page (account-collection consent). Normal extension page → ES module.
+  await buildEntry({
+    input: "src/options/options.ts",
+    outDir: "options",
+    fileName: "options.js",
+    format: "es",
   });
 
   // Emit the manifest with the package version and a human-readable

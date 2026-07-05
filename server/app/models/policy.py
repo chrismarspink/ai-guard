@@ -34,6 +34,8 @@ class Policy(Base):
     # extension's policy loader; nullable so pre-existing rows load unchanged.
     classifier = Column(JSON, nullable=True)
     server_base_url = Column(String, nullable=True)
+    # Account-collection mode pushed to the extension: "off" | "consent".
+    account_collection = Column(String, nullable=True)
     # Explicit flag rather than "latest by updated_at" so the "current" row is
     # an unambiguous, indexed lookup even if two updates land in the same tick.
     is_current = Column(Boolean, nullable=False, default=False, index=True)

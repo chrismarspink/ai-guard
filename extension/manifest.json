@@ -1,12 +1,16 @@
 {
   "manifest_version": 3,
   "name": "innoecm-ai-guard",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Prompt DLP and MIP-label-based upload control for LLM web sites (ChatGPT, Claude, Gemini).",
   "minimum_chrome_version": "111",
   "background": {
     "service_worker": "background/service-worker.js",
     "type": "module"
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
   },
   "permissions": [
     "storage",
