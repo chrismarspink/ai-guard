@@ -27,5 +27,6 @@
   },
   "heartbeatMin": 30,
   "logMasking": true,
-  "serverBaseUrl": "https://chrismarspink-ai-guard-console.hf.space"
+  "serverBaseUrl": "https://chrismarspink-ai-guard-console.hf.space",
+  "classifier": { "url": "http://localhost:10030", "locale": "ko", "neuralBackend": "mdeberta" }
 }

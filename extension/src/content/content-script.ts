@@ -5,7 +5,8 @@ import { extractText } from "../content-scan/extract-text";
 import { decide as decideLabel, type LabelDecision } from "../mip/label-policy";
 import { parseMipLabel } from "../mip/mip-parser";
 import { getPolicy, type Policy } from "../policy/policy-loader";
-import { showDialog } from "../ui/dialog";
+import { classifyTextRemote, classifyFileRemote, type BinaryKind } from "../content-scan/classifier-client";
+import { showDialog, showProgress } from "../ui/dialog";
 
 const CHANNEL = "__innoecm_ai_guard__";
 
@@ -40,6 +41,109 @@ function logEvent(event: Record<string, unknown>): void {
 
 async function classifyText(text: string): Promise<ClassificationResult> {
   return (await chrome.runtime.sendMessage({ type: "CLASSIFY_PROMPT", text })) as ClassificationResult;
+}
+
+// Estimate the neural window count so the progress bar advances at a rate that
+// reflects document size. Mirrors classifier-svc defaults (384 tokens / 64
+// overlap); chars≈tokens is a deliberate over-estimate so the bar stays
+// conservative (never claims done early).
+function estimateChunks(len: number): number {
+  return Math.max(1, Math.ceil((len - 64) / (384 - 64)));
+}
+
+// Grade extracted file text. Uses the mDeBERTa-backed classifier-svc when the
+// policy configures one (handles large documents via server-side token
+// windowing) and shows a determinate progress bar; on any remote failure it
+// falls back to the bundled local T1 engine so the upload is still gated.
+async function classifyFileText(text: string, policy: Policy, fileName: string): Promise<ClassificationResult> {
+  const cfg = policy.classifier;
+  const estChunks = estimateChunks(text.length);
+
+  if (!cfg?.url) {
+    if (estChunks <= 1) return classifyText(text);
+    const p = showProgress("로컬 분석 중", fileName);
+    try {
+      p.update(0.5, "로컬 분석 중");
+      const r = await classifyText(text);
+      p.update(1, "분석 완료");
+      return r;
+    } finally {
+      p.done();
+    }
+  }
+
+  const progress = showProgress("AI 분석 중 (mDeBERTa)", fileName);
+  const totalMs = Math.max(1500, estChunks * 700); // ~700ms/window on CPU mDeBERTa
+  const start = performance.now();
+  const iv = window.setInterval(() => {
+    const frac = Math.min(0.9, (performance.now() - start) / totalMs);
+    progress.update(frac, "AI 분석 중 (mDeBERTa)",
+      estChunks > 1 ? `대용량 문서 · 예상 ${estChunks}개 구간` : undefined);
+  }, 150);
+  try {
+    const r = await classifyTextRemote(text, cfg);
+    progress.update(1, "분석 완료",
+      r.chunksTotal && r.chunksTotal > 1 ? `${r.chunksScanned}/${r.chunksTotal} 구간 스캔` : undefined);
+    return r;
+  } catch {
+    // Remote classifier unreachable → local engine (still a real gate, not an allow).
+    window.clearInterval(iv);
+    progress.update(0.5, "로컬 폴백 분석 중");
+    const r = await classifyText(text);
+    progress.update(1, "분석 완료");
+    return r;
+  } finally {
+    window.clearInterval(iv);
+    progress.done();
+  }
+}
+
+const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "bmp", "webp", "tiff", "tif"]);
+const AUDIO_EXTS = new Set(["mp3", "wav", "m4a", "ogg", "flac", "aac"]);
+const MAX_BINARY_BYTES = 50 * 1024 * 1024;
+
+// Which server-side extraction endpoint (if any) a binary file should use.
+// .hwpx is a zip handled by the text/OOXML path, so only legacy binary .hwp
+// routes to the hwp endpoint.
+function binaryKind(file: File): BinaryKind | null {
+  const name = file.name.toLowerCase();
+  const ext = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1) : "";
+  if (file.type.startsWith("image/") || IMAGE_EXTS.has(ext)) return "image";
+  if (file.type.startsWith("audio/") || AUDIO_EXTS.has(ext)) return "audio";
+  if (ext === "hwp") return "hwp";
+  return null;
+}
+
+// Route a binary file (image/hwp/audio) to classifier-svc for server-side
+// extraction (OCR / pyhwp / STT) + mDeBERTa grading, with a progress bar.
+// Returns null on failure so the caller fails closed (blocks the upload).
+async function classifyBinaryFile(
+  file: File,
+  cfg: NonNullable<Policy["classifier"]>,
+  kind: BinaryKind,
+): Promise<ClassificationResult | null> {
+  if (file.size > MAX_BINARY_BYTES) return null; // too large to base64 → fail closed
+  const label = kind === "image" ? "서버 OCR + AI 분석"
+    : kind === "audio" ? "서버 STT + AI 분석" : "서버 .hwp 추출 + AI 분석";
+  const progress = showProgress(label, file.name);
+  // Audio STT scales with duration; give it a far longer estimate than OCR/hwp.
+  const kb = file.size / 1024;
+  const estMs = kind === "audio" ? Math.max(8000, kb * 20) : Math.max(3000, kb * 4);
+  const start = performance.now();
+  const iv = window.setInterval(() => {
+    progress.update(Math.min(0.9, (performance.now() - start) / estMs), label);
+  }, 150);
+  try {
+    const r = await classifyFileRemote(file, cfg, kind);
+    progress.update(1, "분석 완료",
+      r.chunksTotal && r.chunksTotal > 1 ? `${r.chunksScanned}/${r.chunksTotal} 구간 스캔` : undefined);
+    return r;
+  } catch {
+    return null; // unreachable/unsupported → fail closed
+  } finally {
+    window.clearInterval(iv);
+    progress.done();
+  }
 }
 
 function decidePromptAction(grade: Grade, mode: Policy["mode"]["prompt"]): "allow" | "confirm" | "block" {
@@ -125,9 +229,23 @@ async function handleClassifyPrompt(requestId: string, site: string, originalTex
 
 async function handleCheckFile(requestId: string, site: string, file: File): Promise<void> {
   const policy = await getPolicy();
+  const cfg = policy.classifier;
+  const kind = cfg?.url ? binaryKind(file) : null;
 
-  const extractResult = await extractText(file);
-  const classification = extractResult.status === "ok" ? await classifyText(extractResult.text) : null;
+  let extractResult: { status: "ok" | "unsupported" | "error" };
+  let classification: ClassificationResult | null;
+  if (kind && cfg?.url) {
+    // Image/hwp/audio: the server extracts the text (OCR/pyhwp/STT), so a
+    // successful remote grade means the content WAS scanned; failure fails closed.
+    classification = await classifyBinaryFile(file, cfg, kind);
+    extractResult = { status: classification ? "ok" : "unsupported" };
+  } else {
+    const ex = await extractText(file);
+    extractResult = ex;
+    classification = ex.status === "ok"
+      ? await classifyFileText(ex.text, policy, file.name)
+      : null;
+  }
   const contentRawDecision = decideContent(extractResult, classification, policy.mode.file);
 
   let mipResult: Awaited<ReturnType<typeof parseMipLabel>> | null = null;

@@ -262,10 +262,16 @@ function installNetworkHooks(adapter: SiteAdapter): void {
       const files = extractFilesFromBody(body);
       if (files.length > 0) {
         // XHR.send() has no async contract, so we defer the real send until
-        // the verdict resolves; a block simply means the original send is
-        // never called (best-effort last line of defense, per plan doc §2.1).
+        // the verdict resolves; a block means the original send is never
+        // called (best-effort last line of defense, per plan doc §2.1). On a
+        // block we surface an error event so the page's XHR handlers see a
+        // failed request instead of a request that hangs forever.
         void Promise.all(files.map((file) => requestVerdict("checkFile", { site: adapter.id, file }))).then((verdicts) => {
-          if (verdicts.every((v) => v.action === "allow")) originalSend.call(this, body);
+          if (verdicts.every((v) => v.action === "allow")) {
+            originalSend.call(this, body);
+          } else {
+            this.dispatchEvent(new Event("error"));
+          }
         });
         return;
       }

@@ -22,6 +22,11 @@ export interface Policy {
   heartbeatMin: number;
   logMasking: boolean;
   serverBaseUrl?: string;
+  // Optional neural classifier (classifier-svc). When set, file content is
+  // graded by the mDeBERTa-backed service, which handles large documents via
+  // server-side token windowing. Falls back to the bundled local T1 engine
+  // when unset or unreachable, so uploads are never left ungated.
+  classifier?: { url: string; locale?: string; neuralBackend?: string };
 }
 
 // Bundled fallback used whenever no enterprise (managed) policy has been

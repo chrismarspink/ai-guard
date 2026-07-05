@@ -62,6 +62,27 @@ describe("t1-engine classify", () => {
     expect(result.detections.some((d) => d.type === "KR_PHONE")).toBe(true);
   });
 
+  it("does not misclassify a lone mobile phone number as a KR_ACCOUNT (C)", () => {
+    const result = classify("연락처: 010-1234-5678");
+    expect(result.detections.some((d) => d.type === "KR_ACCOUNT")).toBe(false);
+    expect(result.grade).not.toBe("C");
+  });
+
+  it("does not false-positive an all-lowercase-hex git SHA as an AWS secret key", () => {
+    const result = classify("커밋 356a192b7913b04c54574d18c28d46e6395428ab 를 확인하세요.");
+    expect(result.detections.some((d) => d.type === "AWS_SECRET_KEY")).toBe(false);
+  });
+
+  it("still detects a secret-like 40-char mixed-case+digit token as C", () => {
+    // Assemble the 40-char base64-charset token (lower+upper+digit) at runtime so
+    // no contiguous 40-char literal lives in source to trip secret scanners; it
+    // still exercises the AWS_SECRET_KEY recognizer's shape without a credential.
+    const token = "aB1cD2eF3g".repeat(4); // 40 chars
+    const result = classify(`토큰 ${token} 를 확인하세요.`);
+    expect(result.detections.some((d) => d.type === "AWS_SECRET_KEY")).toBe(true);
+    expect(result.grade).toBe("C");
+  });
+
   it("never reveals the raw value in masked samples", () => {
     const result = classify("제 주민번호는 900101-1234568 입니다.");
     const rrnDetection = result.detections.find((d) => d.type === "KR_RRN");

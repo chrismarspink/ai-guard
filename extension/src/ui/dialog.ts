@@ -29,6 +29,77 @@ const HOST_ID = "innoecm-ai-guard-dialog-host";
 const GRADE_COLOR: Record<Grade, string> = { O: "#16a34a", S: "#d97706", C: "#dc2626" };
 const GRADE_LABEL: Record<Grade, string> = { O: "공개", S: "민감", C: "기밀" };
 
+const PROGRESS_HOST_ID = "innoecm-ai-guard-progress-host";
+
+export interface ProgressHandle {
+  /** pct in [0,1]; optional phase/detail label. */
+  update(pct: number, phase?: string, detail?: string): void;
+  done(): void;
+}
+
+// Lightweight determinate progress overlay shown while a large file is being
+// analyzed (the neural classifier scans it as many token windows, so the wait
+// scales with document size). Kept separate from showDialog so it can be
+// updated in place and dismissed before the decision dialog appears.
+export function showProgress(initialPhase: string, fileName?: string): ProgressHandle {
+  document.getElementById(PROGRESS_HOST_ID)?.remove();
+  const host = document.createElement("div");
+  host.id = PROGRESS_HOST_ID;
+  const shadow = host.attachShadow({ mode: "open" });
+
+  const style = document.createElement("style");
+  style.textContent = `
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2147483647;
+               display: flex; align-items: center; justify-content: center; font-family: sans-serif; }
+    .box { background: #fff; border-radius: 8px; padding: 22px; width: 380px; max-width: 92vw;
+           box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+    .title { font-size: 14px; font-weight: 700; color: #202124; margin-bottom: 4px; }
+    .filename { font-size: 12px; color: #5f6368; margin-bottom: 12px; word-break: break-all; }
+    .row { display: flex; justify-content: space-between; font-size: 12px; color: #5f6368; margin-bottom: 6px; }
+    .track { background: #eee; border-radius: 4px; height: 8px; overflow: hidden; }
+    .fill { height: 100%; background: #1a73e8; width: 3%; transition: width .15s linear; }
+  `;
+  const overlay = document.createElement("div");
+  overlay.className = "overlay";
+  const box = document.createElement("div");
+  box.className = "box";
+  const title = document.createElement("div");
+  title.className = "title";
+  title.textContent = "AI 분석 중 (mDeBERTa)";
+  const nameEl = document.createElement("div");
+  nameEl.className = "filename";
+  nameEl.textContent = fileName ?? "";
+  const row = document.createElement("div");
+  row.className = "row";
+  const phaseEl = document.createElement("span");
+  phaseEl.textContent = initialPhase;
+  const pctEl = document.createElement("span");
+  pctEl.textContent = "0%";
+  row.append(phaseEl, pctEl);
+  const track = document.createElement("div");
+  track.className = "track";
+  const fill = document.createElement("div");
+  fill.className = "fill";
+  track.appendChild(fill);
+
+  box.append(title, nameEl, row, track);
+  overlay.appendChild(box);
+  shadow.append(style, overlay);
+  document.documentElement.appendChild(host);
+
+  return {
+    update(pct: number, phase?: string, detail?: string): void {
+      const clamped = Math.max(0, Math.min(1, pct));
+      fill.style.width = `${Math.round(clamped * 100)}%`;
+      pctEl.textContent = `${Math.round(clamped * 100)}%`;
+      if (phase) phaseEl.textContent = detail ? `${phase} — ${detail}` : phase;
+    },
+    done(): void {
+      host.remove();
+    },
+  };
+}
+
 export function showDialog(opts: DialogOptions): Promise<DialogChoice> {
   return new Promise((resolve) => {
     const existing = document.getElementById(HOST_ID);
