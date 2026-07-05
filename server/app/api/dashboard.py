@@ -1,4 +1,5 @@
 import datetime as dt
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import require_admin
 from app.core.db import get_session
+from app.core.redis_client import cache_get, cache_set
 from app.models.guard_event import EventAction, EventType, GuardEvent
 from app.models.install import Install
 from app.models.noncompliant_device import DeviceStatus, NoncompliantDevice
@@ -125,6 +127,23 @@ def build_summary(db: Session) -> dict:
         GuardEvent.action == EventAction.user_confirmed,
     ).count()
 
+    # P2: large-document neural scan coverage. A file whose chunksScanned <
+    # chunksTotal was truncated by MAX_CHUNKS -- i.e. not fully analyzed, a DLP
+    # blind spot worth surfacing.
+    file_blobs = (
+        db.query(GuardEvent.file)
+        .filter(GuardEvent.received_at >= since, GuardEvent.file.isnot(None))
+        .all()
+    )
+    scanned_with_chunks = 0
+    truncated_scans = 0
+    for (f,) in file_blobs:
+        if isinstance(f, dict) and f.get("chunksTotal"):
+            scanned_with_chunks += 1
+            if (f.get("chunksScanned") or 0) < f["chunksTotal"]:
+                truncated_scans += 1
+    large_doc_scans = {"withChunkInfo": scanned_with_chunks, "truncated": truncated_scans}
+
     return {
         "eventsByTypeDay": events_by_type_day,
         "violationStats": violation_stats,
@@ -147,15 +166,29 @@ def build_summary(db: Session) -> dict:
             "compliantInstalls": compliant_installs,
             "compliancePct": compliance_pct,
         },
+        "largeDocScans": large_doc_scans,
     }
+
+
+SUMMARY_CACHE_KEY = "dashboard:summary"
+SUMMARY_CACHE_TTL = 30  # seconds -- a full recompute per admin refresh is a self-DoS as events grow (P7)
+
+
+def cached_summary(db: Session) -> dict:
+    cached = cache_get(SUMMARY_CACHE_KEY)
+    if cached is not None:
+        return json.loads(cached)
+    data = build_summary(db)
+    cache_set(SUMMARY_CACHE_KEY, json.dumps(data), ex=SUMMARY_CACHE_TTL)
+    return data
 
 
 @router.get("/summary")
 def dashboard_summary(db: Session = Depends(get_session), admin=Depends(require_admin)):
-    return build_summary(db)
+    return cached_summary(db)
 
 
 @router.get("", response_class=HTMLResponse)
 def dashboard_html(request: Request, db: Session = Depends(get_session), admin=Depends(require_admin)):
-    summary = build_summary(db)
+    summary = cached_summary(db)
     return templates.TemplateResponse(request, "dashboard.html", {"summary": summary})

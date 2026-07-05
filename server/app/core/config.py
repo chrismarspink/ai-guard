@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     SEED_ADMIN_EMAIL: str | None = None
     SEED_ADMIN_PASSWORD: str | None = None
     FLEET_WEBHOOK_SECRET: str = DEV_DEFAULT_SECRET
+    # P7: delete guard_events older than this many days on startup / via the
+    # prune endpoint. 0 disables retention (keep everything) -- opt-in so an
+    # existing deployment never silently loses data on upgrade.
+    EVENT_RETENTION_DAYS: int = 0
+    # P10: if set, high-severity events (blocks / grade C) are POSTed here as a
+    # JSON alert (Slack-compatible / generic SIEM webhook). Unset = no alerts.
+    ALERT_WEBHOOK_URL: str | None = None
 
     @model_validator(mode="after")
     def _forbid_default_secrets_in_production(self):

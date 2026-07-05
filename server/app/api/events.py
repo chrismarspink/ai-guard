@@ -1,16 +1,23 @@
 import datetime as dt
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
+from app.core.alerts import dispatch_alert
 from app.core.auth import require_admin, require_install
+from app.core.config import settings
 from app.core.db import get_session
 from app.models.admin_user import AdminUser
+from app.models.audit_log import AuditLog
 from app.models.guard_event import EventAction, EventType, GuardEvent
 from app.models.install import Install
 
 router = APIRouter(tags=["events"])
+
+# High-severity event types that trigger a P10 alert (blocks). Grade "C" on any
+# type also triggers one (e.g. a C-grade prompt the user confirmed and sent).
+ALERT_EVENT_TYPES = {EventType.prompt_block, EventType.file_block}
 
 
 class DetectionIn(BaseModel):
@@ -37,6 +44,11 @@ class FileInfoIn(BaseModel):
     mipChecked: bool | None = Field(default=None, alias="mipChecked")
     labelGuid: str | None = Field(default=None, alias="labelGuid")
     labelName: str | None = Field(default=None, alias="labelName")
+    # P2: neural (mDeBERTa) large-document scan coverage. chunksScanned <
+    # chunksTotal means MAX_CHUNKS truncated the scan -- a DLP blind spot the
+    # dashboard surfaces so admins know a large file wasn't fully analyzed.
+    chunksScanned: int | None = Field(default=None, alias="chunksScanned")
+    chunksTotal: int | None = Field(default=None, alias="chunksTotal")
 
 
 class EventIn(BaseModel):
@@ -58,6 +70,7 @@ class EventIn(BaseModel):
 @router.post("/events", status_code=201)
 def post_event(
     body: EventIn,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_session),
     install: Install = Depends(require_install),
 ):
@@ -76,7 +89,49 @@ def post_event(
     db.add(event)
     db.commit()
     db.refresh(event)
+
+    # P10: fire-and-forget alert on blocks / grade C (after the response).
+    if settings.ALERT_WEBHOOK_URL and (body.type in ALERT_EVENT_TYPES or body.grade == "C"):
+        background_tasks.add_task(dispatch_alert, {
+            "type": body.type.value,
+            "grade": body.grade,
+            "site": body.site,
+            "user": body.user,
+            "installId": install.install_id,
+            "action": body.action.value,
+            "ts": body.ts.isoformat(),
+            "file": body.file.name if body.file else None,
+        })
     return {"id": event.id}
+
+
+def prune_old_events(db: Session, days: int) -> int:
+    """P7: delete events older than `days` (by server receive time). No-op when
+    days <= 0. Returns the number of rows deleted."""
+    if days <= 0:
+        return 0
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)
+    deleted = (
+        db.query(GuardEvent)
+        .filter(GuardEvent.received_at < cutoff)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return deleted
+
+
+@router.post("/events/prune")
+def prune_events(
+    days: int | None = None,
+    db: Session = Depends(get_session),
+    admin: AdminUser = Depends(require_admin),
+):
+    effective = settings.EVENT_RETENTION_DAYS if days is None else days
+    deleted = prune_old_events(db, effective)
+    db.add(AuditLog(actor=admin.email, action="events_prune",
+                    detail={"retentionDays": effective, "deleted": deleted}))
+    db.commit()
+    return {"retentionDays": effective, "deleted": deleted}
 
 
 @router.get("/events")

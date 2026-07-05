@@ -7,8 +7,9 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 import app.models  # noqa: F401  registers all tables on Base before create_all
-from app.api import admin_ui, auth, dashboard, events, fleet, gradeprofile, install, policy
+from app.api import admin_ui, auth, classifier, dashboard, events, fleet, gradeprofile, install, policy
 from app.core import db, seed
+from app.core.config import settings
 
 
 @asynccontextmanager
@@ -17,6 +18,14 @@ async def lifespan(app: FastAPI):
     seed.seed_admin()
     seed.seed_grade_profile()
     seed.seed_default_policy()
+    # P7: enforce event retention once at startup (no scheduler in v1); the
+    # /events/prune endpoint covers on-demand runs. No-op when disabled (0).
+    if settings.EVENT_RETENTION_DAYS > 0:
+        session = db.SessionLocal()
+        try:
+            events.prune_old_events(session, settings.EVENT_RETENTION_DAYS)
+        finally:
+            session.close()
     yield
 
 
@@ -68,6 +77,7 @@ app.include_router(events.router, prefix="/api/v1")
 app.include_router(install.router, prefix="/api/v1")
 app.include_router(fleet.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
+app.include_router(classifier.router, prefix="/api/v1")
 # No /api/v1 prefix: this is a console page (its own JS calls the /api/v1/*
 # endpoints with absolute paths), not part of the API surface itself.
 app.include_router(admin_ui.router)
