@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { cp, mkdir, rm } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "vite";
@@ -7,11 +7,23 @@ import { build } from "vite";
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const distDir = path.join(rootDir, "dist");
 
+// Build stamp: version comes from package.json (bump it with `npm run bump`),
+// buildDate/buildId are generated fresh on every build so each build is
+// traceable in chrome://extensions (via version_name) and dist/build-info.json.
+const pkg = JSON.parse(await readFile(path.join(rootDir, "package.json"), "utf8"));
+const now = new Date();
+const pad = (n) => String(n).padStart(2, "0");
+const buildId =
+  `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}` +
+  `-${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}`;
+const BUILD_INFO = { version: pkg.version, buildDate: now.toISOString(), buildId };
+
 async function buildEntry({ input, outDir, fileName, format }) {
   await build({
     root: rootDir,
     configFile: false,
     logLevel: "warn",
+    define: { __BUILD_INFO__: JSON.stringify(BUILD_INFO) },
     build: {
       outDir: path.join("dist", outDir),
       emptyOutDir: false,
@@ -55,14 +67,22 @@ async function main() {
     format: "iife",
   });
 
-  await cp(path.join(rootDir, "manifest.json"), path.join(distDir, "manifest.json"));
+  // Emit the manifest with the package version and a human-readable
+  // version_name carrying the build date (shown in chrome://extensions), then
+  // a machine-readable build-info.json alongside it.
+  const manifest = JSON.parse(await readFile(path.join(rootDir, "manifest.json"), "utf8"));
+  manifest.version = pkg.version;
+  const humanDate = BUILD_INFO.buildDate.slice(0, 16).replace("T", " ");
+  manifest.version_name = `${pkg.version} (built ${humanDate} UTC)`;
+  await writeFile(path.join(distDir, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+  await writeFile(path.join(distDir, "build-info.json"), JSON.stringify(BUILD_INFO, null, 2) + "\n");
 
   const publicDir = path.join(rootDir, "public");
   if (existsSync(publicDir)) {
     await cp(publicDir, distDir, { recursive: true });
   }
 
-  console.log("Build complete -> dist/");
+  console.log(`Build complete -> dist/  (v${pkg.version}, build ${BUILD_INFO.buildId})`);
 }
 
 main().catch((err) => {

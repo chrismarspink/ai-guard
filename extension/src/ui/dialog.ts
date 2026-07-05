@@ -1,3 +1,4 @@
+import { BUILD_INFO } from "../build-info";
 import type { Detection, Grade } from "../engine/t1-engine";
 import { entityLabel } from "../engine/labels";
 
@@ -141,6 +142,7 @@ export function showDialog(opts: DialogOptions): Promise<DialogChoice> {
       button { font-size: 13px; padding: 8px 16px; border-radius: 6px; border: 1px solid #ccc; cursor: pointer; background: #f1f3f4; }
       button.primary { background: #1a73e8; color: #fff; border-color: #1a73e8; }
       button.anonymize { background: #e6f4ea; color: #1e6b34; border-color: #b7dfc2; }
+      .build-info { font-size: 10px; color: #9aa0a6; margin-top: 10px; text-align: right; }
     `;
 
     const overlay = document.createElement("div");
@@ -276,7 +278,11 @@ export function showDialog(opts: DialogOptions): Promise<DialogChoice> {
       actions.appendChild(sendBtn);
     }
 
-    box.append(head, messageEl, guidance, findingsTitle, findingsBox, auditNotice, actions);
+    const buildInfoEl = document.createElement("div");
+    buildInfoEl.className = "build-info";
+    buildInfoEl.textContent = `innoecm-ai-guard v${BUILD_INFO.version} · build ${BUILD_INFO.buildId}`;
+
+    box.append(head, messageEl, guidance, findingsTitle, findingsBox, auditNotice, actions, buildInfoEl);
     overlay.appendChild(box);
     shadow.appendChild(style);
     shadow.appendChild(overlay);

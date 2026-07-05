@@ -1,6 +1,11 @@
+import { BUILD_INFO } from "../build-info";
 import { classify } from "../engine/t1-engine";
 import { EVENT_FLUSH_RETRY_ALARM, enqueue, flush } from "../lib/event-queue";
 import { getPolicy, onPolicyChange, SERVER_POLICY_CACHE_KEY, type Policy } from "../policy/policy-loader";
+
+// Logged on every service-worker start so the running build (version + date) is
+// visible in the extension's service-worker devtools console.
+console.info(`[innoecm-ai-guard] v${BUILD_INFO.version} build ${BUILD_INFO.buildId} (${BUILD_INFO.buildDate})`);
 
 export const DEFAULT_SERVER_BASE_URL = "https://chrismarspink-ai-guard-console.hf.space";
 
